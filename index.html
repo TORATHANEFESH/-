@@ -1,0 +1,858 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>יומן תלמידות - מכון תורת הנפש</title>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;600;700;800&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
+    
+    <style>
+        * { font-family: 'Heebo', sans-serif; }
+        body { margin: 0; background: #f8fafc; }
+        .card { background: white; border-radius: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); transition: all 0.3s; }
+        .card:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
+        .btn-primary { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
+        .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 8px 16px rgba(102, 126, 234, 0.3); }
+        .progress-smooth { transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1); }
+        input:focus, textarea:focus, select:focus { outline: none; border-color: #667eea; }
+        .code-editor { 
+            font-family: 'Fira Code', monospace; 
+            background: #1e1e1e; 
+            color: #d4d4d4;
+            border-radius: 8px;
+            padding: 1rem;
+            overflow: auto;
+            max-height: 600px;
+        }
+        .announcement { 
+            animation: slideIn 0.5s ease-out;
+        }
+        @keyframes slideIn {
+            from { transform: translateX(100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+
+        const ADMIN_PASSWORD = 'torathanefesh2024';
+
+        const INSTRUCTORS = {
+            female: [
+                { name: 'אורלי טוויטו', phone: '054-6761118' },
+                { name: 'רחלי אלפסי', phone: '054-4652415' },
+                { name: 'חגית גרון', phone: '055-6897708' },
+                { name: 'ריקי שפירא (שלום בית)', phone: '052-6071775' },
+                { name: 'שולמית', phone: '050-2105662' }
+            ],
+            male: [
+                { name: 'הרב מנחם בן שחר', phone: '058-4829829' },
+                { name: 'הרב נעם שפירא', phone: '050-8884177' },
+                { name: 'הרב חיים נתיב', phone: '02-5662323' },
+                { name: 'הרב איציק שפירא', phone: '02-5662323' },
+                { name: 'הרב אפרים ארנברג', phone: '052-3376656' }
+            ]
+        };
+
+        const YEAR_REQUIREMENTS = {
+            female: {
+                2: { practicalHours: 20, supervisionHours: 6, casePresentations: 1 },
+                3: { practicalHours: 30, supervisionHours: 8, casePresentations: 1 },
+                4: { practicalHours: 40, supervisionHours: 8, casePresentations: 1 }
+            },
+            male: {
+                2: { practicalHours: 20, supervisionHours: 6, casePresentations: 2 },
+                3: { practicalHours: 30, supervisionHours: 8, casePresentations: 2 },
+                4: { practicalHours: 40, supervisionHours: 10, casePresentations: 2 }
+            }
+        };
+
+        function App() {
+            const [users, setUsers] = useState([]);
+            const [announcements, setAnnouncements] = useState([]);
+            const [currentUser, setCurrentUser] = useState(null);
+            const [isAdmin, setIsAdmin] = useState(false);
+            const [view, setView] = useState('login');
+            const [logoClickTime, setLogoClickTime] = useState(null);
+
+            useEffect(() => {
+                const saved = localStorage.getItem('toratHaNefesh_users');
+                if (saved) setUsers(JSON.parse(saved));
+                
+                const savedAnnouncements = localStorage.getItem('toratHaNefesh_announcements');
+                if (savedAnnouncements) setAnnouncements(JSON.parse(savedAnnouncements));
+            }, []);
+
+            useEffect(() => {
+                if (users.length > 0) {
+                    localStorage.setItem('toratHaNefesh_users', JSON.stringify(users));
+                }
+            }, [users]);
+
+            useEffect(() => {
+                localStorage.setItem('toratHaNefesh_announcements', JSON.stringify(announcements));
+            }, [announcements]);
+
+            const updateUser = (updates) => {
+                const updated = users.map(u => 
+                    u.id === currentUser.id ? { ...u, ...updates } : u
+                );
+                setUsers(updated);
+                setCurrentUser({ ...currentUser, ...updates });
+            };
+
+            const handleLogoDoubleClick = () => {
+                const now = Date.now();
+                if (logoClickTime && now - logoClickTime < 500) {
+                    const password = prompt('🔐 הזן סיסמת מנהל:');
+                    if (password === ADMIN_PASSWORD) {
+                        setIsAdmin(true);
+                        setView('admin');
+                        alert('✅ התחברת כמנהל');
+                    } else if (password) {
+                        alert('❌ סיסמה שגויה');
+                    }
+                    setLogoClickTime(null);
+                } else {
+                    setLogoClickTime(now);
+                }
+            };
+
+            if (isAdmin && view === 'admin') {
+                return <AdminPanel 
+                    users={users} 
+                    announcements={announcements}
+                    setAnnouncements={setAnnouncements}
+                    setIsAdmin={setIsAdmin} 
+                    setView={setView} 
+                />;
+            }
+
+            if (!currentUser) {
+                return <LoginPage 
+                    users={users} 
+                    setUsers={setUsers} 
+                    setCurrentUser={setCurrentUser} 
+                    onLogoDoubleClick={handleLogoDoubleClick}
+                    announcements={announcements}
+                />;
+            }
+
+            return <MainApp 
+                user={currentUser} 
+                updateUser={updateUser} 
+                view={view} 
+                setView={setView} 
+                onLogout={() => setCurrentUser(null)} 
+                onLogoDoubleClick={handleLogoDoubleClick}
+                announcements={announcements}
+            />;
+        }
+
+        // ============= Admin Panel =============
+        function AdminPanel({ users, announcements, setAnnouncements, setIsAdmin, setView }) {
+            const [adminView, setAdminView] = useState('dashboard');
+            const [selectedUser, setSelectedUser] = useState(null);
+            const [showCodeEditor, setShowCodeEditor] = useState(false);
+
+            return (
+                <div className="min-h-screen bg-gray-50">
+                    <header className="bg-gradient-to-r from-purple-600 to-indigo-600 text-white p-6 shadow-lg">
+                        <div className="max-w-7xl mx-auto flex justify-between items-center">
+                            <div>
+                                <h1 className="text-3xl font-bold">🔐 פאנל ניהול</h1>
+                                <p className="text-purple-100 mt-1">מערכת ניהול מתקדמת</p>
+                            </div>
+                            <button onClick={() => { setIsAdmin(false); setView('login'); }}
+                                className="px-6 py-3 bg-white text-purple-600 rounded-xl font-bold hover:bg-gray-100 transition">
+                                יציאה
+                            </button>
+                        </div>
+                    </header>
+
+                    <div className="max-w-7xl mx-auto p-6">
+                        <nav className="flex gap-2 mb-6 overflow-x-auto pb-2">
+                            <AdminTab active={adminView === 'dashboard'} onClick={() => setAdminView('dashboard')} icon="📊">
+                                תלמידים
+                            </AdminTab>
+                            <AdminTab active={adminView === 'announcements'} onClick={() => setAdminView('announcements')} icon="📢">
+                                עדכונים
+                            </AdminTab>
+                            <AdminTab active={adminView === 'code'} onClick={() => setAdminView('code')} icon="💻">
+                                עורך קוד
+                            </AdminTab>
+                            <AdminTab active={adminView === 'settings'} onClick={() => setAdminView('settings')} icon="⚙️">
+                                הגדרות
+                            </AdminTab>
+                        </nav>
+
+                        {adminView === 'dashboard' && (
+                            <UsersManagement users={users} selectedUser={selectedUser} setSelectedUser={setSelectedUser} />
+                        )}
+                        {adminView === 'announcements' && (
+                            <AnnouncementsManager announcements={announcements} setAnnouncements={setAnnouncements} />
+                        )}
+                        {adminView === 'code' && (
+                            <CodeEditor />
+                        )}
+                        {adminView === 'settings' && (
+                            <SettingsPanel />
+                        )}
+                    </div>
+                </div>
+            );
+        }
+
+        function AdminTab({ active, onClick, icon, children }) {
+            return (
+                <button onClick={onClick}
+                    className={`px-6 py-3 rounded-xl font-semibold whitespace-nowrap transition ${
+                        active ? 'bg-white text-purple-600 shadow-lg' : 'bg-purple-100 text-purple-800 hover:bg-purple-200'
+                    }`}>
+                    {icon} {children}
+                </button>
+            );
+        }
+
+        // ============= Users Management =============
+        function UsersManagement({ users, selectedUser, setSelectedUser }) {
+            if (selectedUser) {
+                return <UserDetails user={selectedUser} onClose={() => setSelectedUser(null)} />;
+            }
+
+            const femaleUsers = users.filter(u => u.gender === 'female');
+            const maleUsers = users.filter(u => u.gender === 'male');
+
+            return (
+                <div className="space-y-6">
+                    <div className="grid md:grid-cols-3 gap-6">
+                        <div className="card p-6">
+                            <div className="text-4xl mb-2">👥</div>
+                            <div className="text-3xl font-bold text-gray-900">{users.length}</div>
+                            <div className="text-gray-600">סה"כ תלמידים</div>
+                        </div>
+                        <div className="card p-6">
+                            <div className="text-4xl mb-2">👩</div>
+                            <div className="text-3xl font-bold text-gray-900">{femaleUsers.length}</div>
+                            <div className="text-gray-600">תלמידות</div>
+                        </div>
+                        <div className="card p-6">
+                            <div className="text-4xl mb-2">👨</div>
+                            <div className="text-3xl font-bold text-gray-900">{maleUsers.length}</div>
+                            <div className="text-gray-600">תלמידים</div>
+                        </div>
+                    </div>
+
+                    <div className="card overflow-hidden">
+                        <h2 className="text-2xl font-bold p-6 border-b">רשימת תלמידים</h2>
+                        {users.length === 0 ? (
+                            <div className="p-12 text-center">
+                                <div className="text-6xl mb-4">📋</div>
+                                <h3 className="text-2xl font-bold text-gray-900 mb-2">אין תלמידים במערכת</h3>
+                            </div>
+                        ) : (
+                            <div className="overflow-x-auto">
+                                <table className="w-full">
+                                    <thead className="bg-gray-50 border-b-2">
+                                        <tr>
+                                            <th className="px-6 py-4 text-right text-sm font-bold text-gray-700">שם</th>
+                                            <th className="px-6 py-4 text-right text-sm font-bold text-gray-700">שנה</th>
+                                            <th className="px-6 py-4 text-right text-sm font-bold text-gray-700">מגדר</th>
+                                            <th className="px-6 py-4 text-right text-sm font-bold text-gray-700">התנסות</th>
+                                            <th className="px-6 py-4 text-right text-sm font-bold text-gray-700">הדרכות</th>
+                                            <th className="px-6 py-4 text-right text-sm font-bold text-gray-700">הצגות</th>
+                                            <th className="px-6 py-4 text-right text-sm font-bold text-gray-700">נוכחות</th>
+                                            <th className="px-6 py-4 text-right text-sm font-bold text-gray-700">פעולות</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {users.map((user, index) => {
+                                            const req = YEAR_REQUIREMENTS[user.gender][user.year];
+                                            return (
+                                                <tr key={user.id} className={`border-b ${index % 2 === 0 ? 'bg-white' : 'bg-gray-50'} hover:bg-blue-50`}>
+                                                    <td className="px-6 py-4 font-semibold">{user.name}</td>
+                                                    <td className="px-6 py-4">שנה {user.year}</td>
+                                                    <td className="px-6 py-4">{user.gender === 'female' ? '👩' : '👨'}</td>
+                                                    <td className="px-6 py-4">
+                                                        <StatusBadge 
+                                                            current={user.practicalHours?.length || 0} 
+                                                            required={req.practicalHours} 
+                                                        />
+                                                    </td>
+                                                    <td className="px-6 py-4">
+                                                        <StatusBadge 
+                                                            current={user.supervisionHours?.length || 0} 
+                                                            required={req.supervisionHours} 
+                                                        />
+                                                    </td>
+                                                    <td className="px-6 py-4">
+                                                        <StatusBadge 
+                                                            current={user.casePresentations?.length || 0} 
+                                                            required={req.casePresentations} 
+                                                        />
+                                                    </td>
+                                                    <td className="px-6 py-4">
+                                                        <StatusBadge 
+                                                            current={user.attendance || 0} 
+                                                            required={80}
+                                                            suffix="%"
+                                                        />
+                                                    </td>
+                                                    <td className="px-6 py-4">
+                                                        <button onClick={() => setSelectedUser(user)}
+                                                            className="px-4 py-2 bg-blue-500 text-white rounded-lg font-semibold hover:bg-blue-600">
+                                                            פרטים
+                                                        </button>
+                                                    </td>
+                                                </tr>
+                                            );
+                                        })}
+                                    </tbody>
+                                </table>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            );
+        }
+
+        function StatusBadge({ current, required, suffix = '' }) {
+            const isComplete = current >= required;
+            return (
+                <span className={`px-3 py-1 rounded-full text-sm font-bold ${
+                    isComplete ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'
+                }`}>
+                    {current}{suffix} / {required}{suffix}
+                </span>
+            );
+        }
+
+        function UserDetails({ user, onClose }) {
+            const req = YEAR_REQUIREMENTS[user.gender][user.year];
+            
+            return (
+                <div className="space-y-6">
+                    <div className="card p-6">
+                        <div className="flex justify-between items-center mb-6">
+                            <div>
+                                <h2 className="text-3xl font-bold">{user.name}</h2>
+                                <p className="text-gray-600">שנה {user.year} | {user.gender === 'female' ? 'נקבה' : 'זכר'}</p>
+                            </div>
+                            <button onClick={onClose} className="px-6 py-3 bg-gray-200 rounded-xl font-bold hover:bg-gray-300">
+                                ← חזרה
+                            </button>
+                        </div>
+
+                        <div className="grid md:grid-cols-4 gap-4">
+                            <div className="bg-blue-50 p-4 rounded-lg">
+                                <div className="text-sm text-blue-600 mb-1">שעות התנסות</div>
+                                <div className="text-2xl font-bold">{user.practicalHours?.length || 0} / {req.practicalHours}</div>
+                            </div>
+                            <div className="bg-green-50 p-4 rounded-lg">
+                                <div className="text-sm text-green-600 mb-1">הדרכות</div>
+                                <div className="text-2xl font-bold">{user.supervisionHours?.length || 0} / {req.supervisionHours}</div>
+                            </div>
+                            <div className="bg-purple-50 p-4 rounded-lg">
+                                <div className="text-sm text-purple-600 mb-1">הצגות מקרה</div>
+                                <div className="text-2xl font-bold">{user.casePresentations?.length || 0} / {req.casePresentations}</div>
+                            </div>
+                            <div className="bg-orange-50 p-4 rounded-lg">
+                                <div className="text-sm text-orange-600 mb-1">נוכחות</div>
+                                <div className="text-2xl font-bold">{user.attendance || 0}%</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    {(user.practicalHours?.length || 0) > 0 && (
+                        <div className="card p-6">
+                            <h3 className="text-xl font-bold mb-4">📋 דיווחי התנסות</h3>
+                            <div className="space-y-2">
+                                {user.practicalHours.map((r, i) => (
+                                    <div key={i} className="p-3 bg-gray-50 rounded-lg flex justify-between">
+                                        <span className="font-semibold">מפגש #{r.sessionNumber}</span>
+                                        <span className="text-sm text-gray-500">{new Date(r.date).toLocaleDateString('he-IL')}</span>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+                </div>
+            );
+        }
+
+        // ============= Announcements Manager =============
+        function AnnouncementsManager({ announcements, setAnnouncements }) {
+            const [showForm, setShowForm] = useState(false);
+            const [form, setForm] = useState({ title: '', content: '', type: 'info', priority: 'normal' });
+
+            const handleSubmit = (e) => {
+                e.preventDefault();
+                const newAnnouncement = {
+                    id: Date.now().toString(),
+                    ...form,
+                    date: new Date().toISOString(),
+                    active: true
+                };
+                setAnnouncements([newAnnouncement, ...announcements]);
+                setForm({ title: '', content: '', type: 'info', priority: 'normal' });
+                setShowForm(false);
+                alert('✅ העדכון פורסם!');
+            };
+
+            const handleDelete = (id) => {
+                if (confirm('❌ למחוק עדכון זה?')) {
+                    setAnnouncements(announcements.filter(a => a.id !== id));
+                }
+            };
+
+            const toggleActive = (id) => {
+                setAnnouncements(announcements.map(a => 
+                    a.id === id ? { ...a, active: !a.active } : a
+                ));
+            };
+
+            return (
+                <div className="space-y-6">
+                    <div className="card p-6">
+                        <div className="flex justify-between items-center mb-6">
+                            <div>
+                                <h2 className="text-2xl font-bold">📢 ניהול עדכונים</h2>
+                                <p className="text-gray-600 mt-1">פרסם עדכונים וההודעות לכל התלמידים</p>
+                            </div>
+                            <button onClick={() => setShowForm(!showForm)}
+                                className={`px-6 py-3 rounded-xl font-bold ${showForm ? 'bg-gray-200' : 'btn-primary text-white'}`}>
+                                {showForm ? '✕ סגור' : '➕ עדכון חדש'}
+                            </button>
+                        </div>
+
+                        {showForm && (
+                            <form onSubmit={handleSubmit} className="bg-gray-50 p-6 rounded-xl space-y-4">
+                                <div>
+                                    <label className="block text-sm font-bold mb-2">כותרת העדכון *</label>
+                                    <input type="text" required value={form.title}
+                                        onChange={e => setForm({...form, title: e.target.value})}
+                                        placeholder="לדוגמה: שינוי במועדי ההדרכות"
+                                        className="w-full px-4 py-3 border-2 rounded-lg focus:border-purple-500" />
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm font-bold mb-2">תוכן העדכון *</label>
+                                    <textarea required value={form.content} rows={4}
+                                        onChange={e => setForm({...form, content: e.target.value})}
+                                        placeholder="פרט את העדכון..."
+                                        className="w-full px-4 py-3 border-2 rounded-lg focus:border-purple-500" />
+                                </div>
+
+                                <div className="grid md:grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="block text-sm font-bold mb-2">סוג העדכון</label>
+                                        <select value={form.type} onChange={e => setForm({...form, type: e.target.value})}
+                                            className="w-full px-4 py-3 border-2 rounded-lg focus:border-purple-500">
+                                            <option value="info">💡 מידע</option>
+                                            <option value="warning">⚠️ אזהרה</option>
+                                            <option value="urgent">🔥 דחוף</option>
+                                            <option value="success">✅ הצלחה</option>
+                                        </select>
+                                    </div>
+
+                                    <div>
+                                        <label className="block text-sm font-bold mb-2">עדיפות</label>
+                                        <select value={form.priority} onChange={e => setForm({...form, priority: e.target.value})}
+                                            className="w-full px-4 py-3 border-2 rounded-lg focus:border-purple-500">
+                                            <option value="low">נמוכה</option>
+                                            <option value="normal">רגילה</option>
+                                            <option value="high">גבוהה</option>
+                                        </select>
+                                    </div>
+                                </div>
+
+                                <button type="submit" className="w-full py-3 btn-primary text-white rounded-xl font-bold">
+                                    📢 פרסם עדכון
+                                </button>
+                            </form>
+                        )}
+                    </div>
+
+                    <div className="card p-6">
+                        <h3 className="text-xl font-bold mb-4">עדכונים קיימים ({announcements.length})</h3>
+                        {announcements.length === 0 ? (
+                            <div className="text-center p-8 text-gray-500">
+                                <div className="text-5xl mb-3">📢</div>
+                                <p>אין עדכונים עדיין</p>
+                            </div>
+                        ) : (
+                            <div className="space-y-3">
+                                {announcements.map(ann => (
+                                    <AnnouncementCard 
+                                        key={ann.id} 
+                                        announcement={ann}
+                                        onToggle={() => toggleActive(ann.id)}
+                                        onDelete={() => handleDelete(ann.id)}
+                                    />
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                </div>
+            );
+        }
+
+        function AnnouncementCard({ announcement, onToggle, onDelete }) {
+            const typeStyles = {
+                info: 'bg-blue-50 border-blue-200 text-blue-900',
+                warning: 'bg-yellow-50 border-yellow-200 text-yellow-900',
+                urgent: 'bg-red-50 border-red-200 text-red-900',
+                success: 'bg-green-50 border-green-200 text-green-900'
+            };
+
+            const typeIcons = {
+                info: '💡',
+                warning: '⚠️',
+                urgent: '🔥',
+                success: '✅'
+            };
+
+            return (
+                <div className={`p-4 border-2 rounded-lg ${typeStyles[announcement.type]} ${!announcement.active ? 'opacity-50' : ''}`}>
+                    <div className="flex justify-between items-start mb-2">
+                        <div className="flex items-center gap-2">
+                            <span className="text-2xl">{typeIcons[announcement.type]}</span>
+                            <h4 className="font-bold text-lg">{announcement.title}</h4>
+                        </div>
+                        <div className="flex gap-2">
+                            <button onClick={onToggle}
+                                className={`px-3 py-1 rounded-lg text-sm font-semibold ${announcement.active ? 'bg-green-500 text-white' : 'bg-gray-300 text-gray-700'}`}>
+                                {announcement.active ? 'פעיל' : 'מושבת'}
+                            </button>
+                            <button onClick={onDelete} className="px-3 py-1 bg-red-500 text-white rounded-lg text-sm font-semibold">
+                                🗑️
+                            </button>
+                        </div>
+                    </div>
+                    <p className="mb-2">{announcement.content}</p>
+                    <div className="flex gap-3 text-sm opacity-75">
+                        <span>📅 {new Date(announcement.date).toLocaleDateString('he-IL')}</span>
+                        <span>🎯 עדיפות: {announcement.priority === 'high' ? 'גבוהה' : announcement.priority === 'low' ? 'נמוכה' : 'רגילה'}</span>
+                    </div>
+                </div>
+            );
+        }
+
+        // ============= Code Editor =============
+        function CodeEditor() {
+            const [code, setCode] = useState('');
+            const [fileName, setFileName] = useState('torat-hanefesh.html');
+
+            useEffect(() => {
+                // טעינת הקוד הנוכחי
+                fetch(window.location.href)
+                    .then(r => r.text())
+                    .then(html => setCode(html))
+                    .catch(() => setCode('// לא ניתן לטעון את הקוד'));
+            }, []);
+
+            const handleSave = () => {
+                const blob = new Blob([code], { type: 'text/html' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = fileName;
+                a.click();
+                URL.revokeObjectURL(url);
+                alert('✅ הקובץ נשמר! פתח אותו כדי לראות את השינויים');
+            };
+
+            const handleDownload = () => {
+                const blob = new Blob([code], { type: 'text/html' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = fileName;
+                a.click();
+                URL.revokeObjectURL(url);
+            };
+
+            return (
+                <div className="space-y-6">
+                    <div className="card p-6">
+                        <h2 className="text-2xl font-bold mb-2">💻 עורך קוד</h2>
+                        <p className="text-gray-600 mb-4">ערוך את קוד האפליקציה ישירות מכאן</p>
+
+                        <div className="flex gap-3 mb-4">
+                            <input type="text" value={fileName}
+                                onChange={e => setFileName(e.target.value)}
+                                className="flex-1 px-4 py-2 border-2 rounded-lg"
+                                placeholder="שם הקובץ" />
+                            <button onClick={handleSave} className="px-6 py-2 bg-green-500 text-white rounded-lg font-bold hover:bg-green-600">
+                                💾 שמור
+                            </button>
+                            <button onClick={handleDownload} className="px-6 py-2 bg-blue-500 text-white rounded-lg font-bold hover:bg-blue-600">
+                                📥 הורד
+                            </button>
+                        </div>
+
+                        <div className="bg-yellow-50 border-r-4 border-yellow-500 p-4 rounded-lg mb-4">
+                            <p className="text-yellow-900 font-semibold text-sm">
+                                💡 טיפ: לאחר עריכה, שמור את הקובץ ופתח אותו בדפדפן כדי לראות את השינויים
+                            </p>
+                        </div>
+                    </div>
+
+                    <div className="card p-6">
+                        <textarea 
+                            value={code}
+                            onChange={e => setCode(e.target.value)}
+                            className="w-full code-editor"
+                            rows={30}
+                            spellCheck={false}
+                        />
+                        <div className="mt-4 text-sm text-gray-500">
+                            <p>שורות: {code.split('\n').length} | תווים: {code.length}</p>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        // ============= Settings Panel =============
+        function SettingsPanel() {
+            return (
+                <div className="card p-6">
+                    <h2 className="text-2xl font-bold mb-4">⚙️ הגדרות מערכת</h2>
+                    <div className="space-y-4">
+                        <div className="bg-blue-50 p-4 rounded-lg">
+                            <h3 className="font-bold mb-2">🔐 סיסמת מנהל</h3>
+                            <p className="text-sm text-gray-700">הסיסמה הנוכחית: <code className="bg-white px-2 py-1 rounded">torathanefesh2024</code></p>
+                            <p className="text-xs text-gray-500 mt-2">לשינוי הסיסמה, ערוך את הקוד בעורך הקוד</p>
+                        </div>
+
+                        <div className="bg-green-50 p-4 rounded-lg">
+                            <h3 className="font-bold mb-2">💾 גיבוי נתונים</h3>
+                            <button onClick={() => {
+                                const data = {
+                                    users: JSON.parse(localStorage.getItem('toratHaNefesh_users') || '[]'),
+                                    announcements: JSON.parse(localStorage.getItem('toratHaNefesh_announcements') || '[]')
+                                };
+                                const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+                                const url = URL.createObjectURL(blob);
+                                const a = document.createElement('a');
+                                a.href = url;
+                                a.download = `backup-${new Date().toISOString().split('T')[0]}.json`;
+                                a.click();
+                                URL.revokeObjectURL(url);
+                            }} className="px-4 py-2 bg-green-500 text-white rounded-lg font-semibold">
+                                📥 גיבוי נתונים
+                            </button>
+                        </div>
+
+                        <div className="bg-red-50 p-4 rounded-lg">
+                            <h3 className="font-bold mb-2">🗑️ איפוס מערכת</h3>
+                            <button onClick={() => {
+                                if (confirm('⚠️ האם אתה בטוח? כל הנתונים יימחקו!')) {
+                                    localStorage.clear();
+                                    window.location.reload();
+                                }
+                            }} className="px-4 py-2 bg-red-500 text-white rounded-lg font-semibold">
+                                איפוס כל הנתונים
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        // ============= Login Page =============
+        function LoginPage({ users, setUsers, setCurrentUser, onLogoDoubleClick, announcements }) {
+            const [isRegister, setIsRegister] = useState(false);
+            const [form, setForm] = useState({ name: '', year: '2', gender: 'female', email: '', password: '' });
+
+            const activeAnnouncements = announcements.filter(a => a.active && a.priority === 'high');
+
+            const handleSubmit = (e) => {
+                e.preventDefault();
+                if (isRegister) {
+                    const newUser = {
+                        id: Date.now().toString(),
+                        ...form,
+                        practicalHours: [],
+                        supervisionHours: [],
+                        casePresentations: [],
+                        caseSummaries: [],
+                        consultations: [],
+                        attendance: 0
+                    };
+                    setUsers([...users, newUser]);
+                    setCurrentUser(newUser);
+                } else {
+                    const user = users.find(u => u.email === form.email && u.password === form.password);
+                    if (user) {
+                        setCurrentUser(user);
+                    } else {
+                        alert('❌ פרטי התחברות שגויים');
+                    }
+                }
+            };
+
+            return (
+                <div className="min-h-screen flex items-center justify-center p-6" style={{background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'}}>
+                    <div className="max-w-4xl w-full flex flex-col md:flex-row gap-6">
+                        {/* עדכונים */}
+                        {activeAnnouncements.length > 0 && (
+                            <div className="md:w-1/3 space-y-3">
+                                {activeAnnouncements.map(ann => (
+                                    <div key={ann.id} className="announcement bg-white p-4 rounded-xl shadow-lg">
+                                        <div className="flex items-center gap-2 mb-2">
+                                            <span className="text-2xl">{ann.type === 'urgent' ? '🔥' : ann.type === 'warning' ? '⚠️' : '💡'}</span>
+                                            <h3 className="font-bold">{ann.title}</h3>
+                                        </div>
+                                        <p className="text-sm text-gray-700">{ann.content}</p>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+
+                        {/* טופס התחברות */}
+                        <div className="flex-1 bg-white rounded-3xl shadow-2xl p-10">
+                            <div className="text-center mb-8">
+                                <div onClick={onLogoDoubleClick}
+                                    className="w-20 h-20 bg-gradient-to-br from-purple-500 to-indigo-600 rounded-2xl mx-auto mb-4 flex items-center justify-center cursor-pointer"
+                                    title="לחיצה כפולה למנהל">
+                                    <span className="text-4xl">📚</span>
+                                </div>
+                                <h1 className="text-3xl font-bold text-gray-900 mb-2">מכון תורת הנפש</h1>
+                                <p className="text-gray-600">יומן התלמידות הדיגיטלי</p>
+                            </div>
+
+                            <form onSubmit={handleSubmit} className="space-y-4">
+                                {isRegister && (
+                                    <>
+                                        <div>
+                                            <label className="block text-sm font-semibold text-gray-700 mb-2">שם מלא</label>
+                                            <input type="text" required value={form.name} onChange={e => setForm({...form, name: e.target.value})}
+                                                className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-purple-500 transition" />
+                                        </div>
+                                        <div className="grid grid-cols-2 gap-4">
+                                            <div>
+                                                <label className="block text-sm font-semibold text-gray-700 mb-2">שנת לימוד</label>
+                                                <select value={form.year} onChange={e => setForm({...form, year: e.target.value})}
+                                                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-purple-500 transition">
+                                                    <option value="2">שנה ב'</option>
+                                                    <option value="3">שנה ג'</option>
+                                                    <option value="4">שנה ד'</option>
+                                                </select>
+                                            </div>
+                                            <div>
+                                                <label className="block text-sm font-semibold text-gray-700 mb-2">מגדר</label>
+                                                <select value={form.gender} onChange={e => setForm({...form, gender: e.target.value})}
+                                                    className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-purple-500 transition">
+                                                    <option value="female">נקבה</option>
+                                                    <option value="male">זכר</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                    </>
+                                )}
+                                <div>
+                                    <label className="block text-sm font-semibold text-gray-700 mb-2">אימייל</label>
+                                    <input type="email" required value={form.email} onChange={e => setForm({...form, email: e.target.value})}
+                                        className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-purple-500 transition" />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-semibold text-gray-700 mb-2">סיסמה</label>
+                                    <input type="password" required value={form.password} onChange={e => setForm({...form, password: e.target.value})}
+                                        className="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-purple-500 transition" />
+                                </div>
+                                <button type="submit" className="w-full py-4 btn-primary text-white rounded-xl font-bold text-lg transition transform">
+                                    {isRegister ? 'הרשמה' : 'התחברות'}
+                                </button>
+                            </form>
+
+                            <button onClick={() => setIsRegister(!isRegister)} className="w-full mt-4 text-purple-600 font-semibold hover:text-purple-700">
+                                {isRegister ? '← יש לי חשבון' : 'אין לי חשבון →'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        // ============= Main App (placeholder) =============
+        function MainApp({ user, updateUser, view, setView, onLogout, onLogoDoubleClick, announcements }) {
+            const activeAnnouncements = announcements.filter(a => a.active);
+            
+            return (
+                <div className="min-h-screen bg-gray-50">
+                    <header className="bg-white border-b sticky top-0 z-50 shadow-sm">
+                        <div className="max-w-7xl mx-auto px-6 py-4">
+                            <div className="flex justify-between items-center">
+                                <div className="flex items-center gap-4">
+                                    <div onClick={onLogoDoubleClick}
+                                        className="w-12 h-12 bg-gradient-to-br from-purple-500 to-indigo-600 rounded-xl flex items-center justify-center cursor-pointer"
+                                        title="לחיצה כפולה למנהל">
+                                        <span className="text-2xl">📚</span>
+                                    </div>
+                                    <div>
+                                        <h1 className="text-xl font-bold text-gray-900">מכון תורת הנפש</h1>
+                                        <p className="text-sm text-gray-500">יומן תלמידות</p>
+                                    </div>
+                                </div>
+                                <div className="flex items-center gap-4">
+                                    <div className="text-right hidden sm:block">
+                                        <p className="font-semibold text-gray-900">{user.name}</p>
+                                        <p className="text-sm text-gray-500">שנה {user.year}</p>
+                                    </div>
+                                    <button onClick={onLogout} className="px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg font-semibold text-gray-700">
+                                        יציאה
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </header>
+
+                    <div className="max-w-7xl mx-auto px-6 py-6">
+                        {/* עדכונים */}
+                        {activeAnnouncements.length > 0 && (
+                            <div className="mb-6 space-y-3">
+                                {activeAnnouncements.map(ann => {
+                                    const styles = {
+                                        info: 'bg-blue-50 border-blue-200',
+                                        warning: 'bg-yellow-50 border-yellow-200',
+                                        urgent: 'bg-red-50 border-red-200',
+                                        success: 'bg-green-50 border-green-200'
+                                    };
+                                    const icons = { info: '💡', warning: '⚠️', urgent: '🔥', success: '✅' };
+                                    
+                                    return (
+                                        <div key={ann.id} className={`announcement p-4 border-2 rounded-xl ${styles[ann.type]}`}>
+                                            <div className="flex items-center gap-2 mb-2">
+                                                <span className="text-2xl">{icons[ann.type]}</span>
+                                                <h3 className="font-bold">{ann.title}</h3>
+                                            </div>
+                                            <p className="text-sm">{ann.content}</p>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        )}
+
+                        <div className="card p-8 text-center">
+                            <h2 className="text-2xl font-bold mb-4">ברוכים הבאים, {user.name}!</h2>
+                            <p className="text-gray-600">המערכת המלאה בקרוב...</p>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        ReactDOM.render(<App />, document.getElementById('root'));
+    </script>
+</body>
+</html>
