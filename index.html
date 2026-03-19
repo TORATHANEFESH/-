@@ -21,6 +21,17 @@
         input:focus, textarea:focus, select:focus { outline: none; border-color: #667eea; }
         .field-required::after { content: ' *'; color: #ef4444; }
         .section-divider { border-top: 2px solid #e5e7eb; margin: 2rem 0; padding-top: 2rem; }
+            /* אנימציות */
+        @keyframes float {
+            0% { transform: translateY(0px) translateX(0px); }
+            33% { transform: translateY(-50px) translateX(-30px); }
+            66% { transform: translateY(-20px) translateX(40px); }
+            100% { transform: translateY(0px) translateX(0px); }
+        }
+        @keyframes pulse {
+            0%, 100% { transform: translate(-50%, -50%) scale(1); opacity: 0.15; }
+            50% { transform: translate(-50%, -50%) scale(1.3); opacity: 0.3; }
+        }
     </style>
 </head>
 <body>
@@ -56,11 +67,12 @@
         function App() {
             const [users, setUsers] = useState([]);
             const [currentUser, setCurrentUser] = useState(null);
-            const [view, setView] = useState('login');
+            const [view, setView] = useState('dashboard');
             const [announcements, setAnnouncements] = useState([]);
-            const [adminPassword, setAdminPassword] = useState('torathanefesh2024');
+            const [adminPassword, setAdminPassword] = useState('1234');
             const [isAdmin, setIsAdmin] = useState(false);
             const [logoClickTime, setLogoClickTime] = useState(null);
+            const [footerLinks, setFooterLinks] = useState([]);
 
             useEffect(() => {
                 const saved = localStorage.getItem('toratHaNefesh_users');
@@ -73,6 +85,27 @@
                 }
             }, [users]);
 
+            useEffect(() => {
+                const savedAnn = localStorage.getItem('toratHaNefesh_announcements');
+                if (savedAnn) setAnnouncements(JSON.parse(savedAnn));
+                const savedPass = localStorage.getItem('toratHaNefesh_adminPassword');
+                if (savedPass) setAdminPassword(savedPass);
+                const savedLinks = localStorage.getItem('toratHaNefesh_footerLinks');
+                if (savedLinks) setFooterLinks(JSON.parse(savedLinks));
+            }, []);
+
+            useEffect(() => {
+                localStorage.setItem('toratHaNefesh_announcements', JSON.stringify(announcements));
+            }, [announcements]);
+
+            useEffect(() => {
+                localStorage.setItem('toratHaNefesh_adminPassword', adminPassword);
+            }, [adminPassword]);
+
+            useEffect(() => {
+                localStorage.setItem('toratHaNefesh_footerLinks', JSON.stringify(footerLinks));
+            }, [footerLinks]);
+
             const updateUser = (updates) => {
                 const updated = users.map(u => 
                     u.id === currentUser.id ? { ...u, ...updates } : u
@@ -80,7 +113,6 @@
                 setUsers(updated);
                 setCurrentUser({ ...currentUser, ...updates });
             };
-
 
             const handleLogoDoubleClick = () => {
                 const now = Date.now();
@@ -100,14 +132,14 @@
             };
 
             if (isAdmin && view === 'admin') {
-                return <AdminPanel users={users} announcements={announcements} setAnnouncements={setAnnouncements} adminPassword={adminPassword} setAdminPassword={setAdminPassword} setIsAdmin={setIsAdmin} setView={setView} />;
+                return <AdminPanel users={users} announcements={announcements} setAnnouncements={setAnnouncements} adminPassword={adminPassword} setAdminPassword={setAdminPassword} footerLinks={footerLinks} setFooterLinks={setFooterLinks} setIsAdmin={setIsAdmin} setView={setView} />;
             }
 
             if (!currentUser) {
                 return <LoginPage users={users} setUsers={setUsers} setCurrentUser={setCurrentUser} onLogoDoubleClick={handleLogoDoubleClick} announcements={announcements} />;
             }
 
-            return <MainApp user={currentUser} updateUser={updateUser} view={view} setView={setView} onLogout={() => { setCurrentUser(null); setView('login'); }} onLogoDoubleClick={handleLogoDoubleClick} announcements={announcements} />;
+            return <MainApp user={currentUser} updateUser={updateUser} view={view} setView={setView} onLogout={() => { setCurrentUser(null); setView('login'); }} onLogoDoubleClick={handleLogoDoubleClick} announcements={announcements} footerLinks={footerLinks} />;
         }
 
         function LoginPage({ users, setUsers, setCurrentUser, onLogoDoubleClick, announcements }) {
@@ -141,11 +173,18 @@
             };
 
             return (
-                <div className="min-h-screen flex items-center justify-center p-6" style={{background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'}}>
+                <div className="min-h-screen flex items-center justify-center p-6" style={{background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)', position: 'relative', overflow: 'hidden'}}>
+                    {/* אנימציה ברקע */}
+                    <div style={{position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, overflow: 'hidden', zIndex: 1, pointerEvents: 'none'}}>
+                        <div style={{position: 'absolute', width: '600px', height: '600px', background: 'rgba(255,255,255,0.15)', borderRadius: '50%', top: '-250px', right: '-250px', animation: 'float 15s infinite ease-in-out'}} />
+                        <div style={{position: 'absolute', width: '500px', height: '500px', background: 'rgba(255,255,255,0.12)', borderRadius: '50%', bottom: '-200px', left: '-200px', animation: 'float 18s infinite ease-in-out reverse'}} />
+                        <div style={{position: 'absolute', width: '400px', height: '400px', background: 'rgba(255,255,255,0.1)', borderRadius: '50%', top: '50%', left: '50%', animation: 'pulse 8s infinite ease-in-out'}} />
+                        <div style={{position: 'absolute', width: '350px', height: '350px', background: 'rgba(255,255,255,0.08)', borderRadius: '50%', top: '20%', right: '10%', animation: 'float 12s infinite ease-in-out'}} />
+                    </div>
                     <div className="bg-white rounded-3xl shadow-2xl p-10 max-w-md w-full">
                         <div className="text-center mb-8">
-                            <div onClick={onLogoDoubleClick} className="mx-auto mb-4 text-center cursor-pointer hover:opacity-80 transition" title="לחיצה כפולה למנהל">
-                                <img src={`data:image/png;base64,${LOGO_BASE64}`} alt="לוגו מכללת תורת הנפש" style={{maxWidth: '200px', height: 'auto'}} />
+                            <div onClick={onLogoDoubleClick} onDoubleClick={onLogoDoubleClick} className="mx-auto mb-4 text-center cursor-pointer hover:opacity-80 transition" title="לחיצה כפולה למנהל">
+                                <img src={`data:image/png;base64,${LOGO_BASE64}`} alt="לוגו מכללת תורת הנפש" style={{maxWidth: '280px', height: 'auto'}} />
                             </div>
                             <h1 className="text-3xl font-bold text-gray-900 mb-2">מכללת תורת הנפש</h1>
                             <h2 className="text-xl font-semibold text-gray-700 mb-1">בדרך הבעל שם טוב</h2>
@@ -200,22 +239,25 @@
                             {isRegister ? '← יש לי חשבון' : 'אין לי חשבון →'}
                         </button>
                     </div>
+                    <div style={{position: 'fixed', bottom: '20px', left: '20px', zIndex: 50}}>
+                        <p className="text-white text-sm opacity-80">
+                            © {new Date().getFullYear()} מכללת תורת הנפש - כל הזכויות שמורות
+                        </p>
+                    </div>
                 </div>
             );
         }
 
-        function MainApp({ user, updateUser, view, setView, onLogout }) {
+        function MainApp({ user, updateUser, view, setView, onLogout, onLogoDoubleClick, announcements, footerLinks }) {
             return (
                 <div className="min-h-screen bg-gray-50">
                     <header className="bg-white border-b sticky top-0 z-50 shadow-sm">
                         <div className="max-w-7xl mx-auto px-6 py-4">
                             <div className="flex justify-between items-center">
                                 <div className="flex items-center gap-4">
-                                    <div className="w-12 h-12 bg-gradient-to-br from-purple-500 to-indigo-600 rounded-xl flex items-center justify-center">
-                                        <span className="text-2xl">📚</span>
-                                    </div>
+                                    <img onClick={onLogoDoubleClick} onDoubleClick={onLogoDoubleClick} src={`data:image/png;base64,${LOGO_BASE64}`} alt="לוגו מכללת תורת הנפש" style={{height: '100px', width: 'auto', cursor: 'pointer'}} title="לחיצה כפולה למנהל" />
                                     <div>
-                                        <h1 className="text-xl font-bold text-gray-900">מכון תורת הנפש</h1>
+                                        <h1 className="text-xl font-bold text-gray-900">מכללת תורת הנפש</h1>
                                         <p className="text-sm text-gray-500">יומן תלמידות</p>
                                     </div>
                                 </div>
@@ -251,6 +293,7 @@
                         {view === 'attendance' && <Attendance user={user} updateUser={updateUser} />}
                         {view === 'contacts' && <Contacts user={user} />}
                     </div>
+                    <Footer links={footerLinks} />
                 </div>
             );
         }
@@ -1167,30 +1210,79 @@
         }
 
         
+        // ============= Footer Component =============
+        function Footer({ links = [] }) {
+            return (
+                <footer className="bg-gray-800 text-white py-8 mt-20">
+                    <div className="max-w-7xl mx-auto px-6">
+                        <div className="grid md:grid-cols-3 gap-8 mb-6">
+                            <div>
+                                <div className="flex items-center gap-3 mb-3">
+                                    <img src={`data:image/png;base64,${LOGO_BASE64}`} alt="לוגו" style={{height: '50px', width: 'auto'}} />
+                                    <h3 className="font-bold text-xl">מכללת תורת הנפש</h3>
+                                </div>
+                                <p className="text-gray-300 text-sm">בדרך הבעל שם טוב</p>
+                            </div>
+                            <div>
+                                <h4 className="font-bold mb-3">יצירת קשר</h4>
+                                <p className="text-gray-300 text-sm">📞 02-5662323</p>
+                                <p className="text-gray-300 text-sm">✉️ info@torathanefesh.org</p>
+                            </div>
+                            <div>
+                                <h4 className="font-bold mb-3">קישורים</h4>
+                                {links && links.length > 0 ? (
+                                    links.map(link => (
+                                        <a key={link.id} href={link.url} target="_blank" rel="noopener noreferrer" className="block text-gray-300 text-sm hover:text-white hover:underline mb-1">
+                                            🔗 {link.title}
+                                        </a>
+                                    ))
+                                ) : (
+                                    <p className="text-gray-400 text-sm">אין קישורים (ניתן להוסיף בניהול)</p>
+                                )}
+                            </div>
+                        </div>
+                        <div className="border-t border-gray-700 pt-6 text-center">
+                            <div className="flex items-center justify-center gap-3">
+                                <img src={`data:image/png;base64,${LOGO_BASE64}`} alt="לוגו" style={{height: '40px', width: 'auto', opacity: 0.8}} />
+                                <p className="text-gray-400 text-sm">
+                                    © {new Date().getFullYear()} מכללת תורת הנפש - כל הזכויות שמורות
+                                </p>
+                            </div>
+                            <p className="text-gray-500 text-xs mt-2">
+                                פותח בטכנולוגיית React | יומן תלמידות דיגיטלי
+                            </p>
+                        </div>
+                    </div>
+                </footer>
+            );
+        }
+
         // ============= Admin Panel =============
-        function AdminPanel({ users, announcements, setAnnouncements, adminPassword, setAdminPassword, setIsAdmin, setView }) {
-            const [adminView, setAdminView] = useState('settings');
+        function AdminPanel({ users, announcements, setAnnouncements, adminPassword, setAdminPassword, footerLinks, setFooterLinks, setIsAdmin, setView }) {
+            const [adminView, setAdminView] = useState('dashboard');
 
             return (
                 <div className="min-h-screen bg-gray-50">
                     <header className="bg-gradient-to-r from-purple-600 to-indigo-600 text-white p-6 shadow-lg">
-                        <div className="max-w-7xl mx-auto flex justify-between items-center">
-                            <div>
-                                <h1 className="text-3xl font-bold">🔐 פאנל ניהול</h1>
-                                <p className="text-purple-100 mt-1">מכללת תורת הנפש</p>
+                        <div className="max-w-7xl mx-auto">
+                            <div className="flex justify-between items-center">
+                                <div>
+                                    <h1 className="text-3xl font-bold">🔐 פאנל ניהול</h1>
+                                    <p className="text-purple-100 mt-1">מכללת תורת הנפש</p>
+                                </div>
+                                <button onClick={() => { setIsAdmin(false); setView('login'); }}
+                                    className="px-6 py-3 bg-white text-purple-600 rounded-xl font-bold hover:bg-gray-100 transition">
+                                    יציאה
+                                </button>
                             </div>
-                            <button onClick={() => { setIsAdmin(false); setView('login'); }}
-                                className="px-6 py-3 bg-white text-purple-600 rounded-xl font-bold hover:bg-gray-100 transition">
-                                יציאה
-                            </button>
                         </div>
                     </header>
 
                     <div className="max-w-7xl mx-auto p-6">
-                        <nav className="flex gap-2 mb-6">
-                            <button onClick={() => setAdminView('dashboard')} className={`px-6 py-3 rounded-xl font-bold ${adminView === 'dashboard' ? 'bg-white shadow' : 'bg-purple-100'}`}>📊 תלמידים</button>
-                            <button onClick={() => setAdminView('announcements')} className={`px-6 py-3 rounded-xl font-bold ${adminView === 'announcements' ? 'bg-white shadow' : 'bg-purple-100'}`}>📢 עדכונים</button>
-                            <button onClick={() => setAdminView('settings')} className={`px-6 py-3 rounded-xl font-bold ${adminView === 'settings' ? 'bg-white shadow' : 'bg-purple-100'}`}>⚙️ הגדרות</button>
+                        <nav className="flex gap-2 mb-6 overflow-x-auto">
+                            <button onClick={() => setAdminView('dashboard')} className={`px-6 py-3 rounded-xl font-bold whitespace-nowrap ${adminView === 'dashboard' ? 'bg-white shadow' : 'bg-purple-100'}`}>📊 תלמידים</button>
+                            <button onClick={() => setAdminView('links')} className={`px-6 py-3 rounded-xl font-bold whitespace-nowrap ${adminView === 'links' ? 'bg-white shadow' : 'bg-purple-100'}`}>🔗 קישורים</button>
+                            <button onClick={() => setAdminView('settings')} className={`px-6 py-3 rounded-xl font-bold whitespace-nowrap ${adminView === 'settings' ? 'bg-white shadow' : 'bg-purple-100'}`}>⚙️ הגדרות</button>
                         </nav>
 
                         {adminView === 'dashboard' && (
@@ -1223,49 +1315,75 @@
                             </div>
                         )}
 
-                        {adminView === 'announcements' && (
-                            <div className="card p-6">
-                                <h2 className="text-2xl font-bold mb-4">📢 עדכונים</h2>
-                                <p className="text-gray-600">מערכת עדכונים תתווסף בקרוב...</p>
+                        {adminView === 'links' && (
+                            <div className="card p-8">
+                                <h2 className="text-2xl font-bold mb-6">🔗 ניהול קישורים</h2>
+                                <div className="bg-blue-50 p-6 rounded-lg mb-6">
+                                    <h3 className="font-bold text-blue-900 mb-4">➕ הוסף קישור</h3>
+                                    <div className="space-y-3">
+                                        <input id="linkTitle" type="text" placeholder="שם הקישור" className="w-full px-4 py-3 border-2 rounded-lg" />
+                                        <input id="linkUrl" type="url" placeholder="https://..." className="w-full px-4 py-3 border-2 rounded-lg" />
+                                        <button onClick={() => {
+                                            const title = document.getElementById('linkTitle').value;
+                                            const url = document.getElementById('linkUrl').value;
+                                            if (title && url) {
+                                                setFooterLinks([...footerLinks, { id: Date.now(), title, url }]);
+                                                document.getElementById('linkTitle').value = '';
+                                                document.getElementById('linkUrl').value = '';
+                                                alert('✅ קישור נוסף!');
+                                            } else {
+                                                alert('❌ מלא את כל השדות');
+                                            }
+                                        }} className="w-full px-6 py-3 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700">
+                                            ➕ הוסף
+                                        </button>
+                                    </div>
+                                </div>
+                                <div className="bg-gray-50 p-6 rounded-lg">
+                                    <h3 className="font-bold mb-4">קישורים ({footerLinks.length})</h3>
+                                    {footerLinks.length === 0 ? <p className="text-gray-500 text-center p-8">אין קישורים</p> : (
+                                        <div className="space-y-3">
+                                            {footerLinks.map(link => (
+                                                <div key={link.id} className="bg-white p-4 rounded-lg flex justify-between items-center">
+                                                    <div>
+                                                        <p className="font-bold">{link.title}</p>
+                                                        <a href={link.url} target="_blank" className="text-sm text-blue-600">{link.url}</a>
+                                                    </div>
+                                                    <button onClick={() => {
+                                                        if (confirm('למחוק?')) setFooterLinks(footerLinks.filter(l => l.id !== link.id));
+                                                    }} className="px-4 py-2 bg-red-500 text-white rounded-lg font-bold">🗑️</button>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
                             </div>
                         )}
 
                         {adminView === 'settings' && (
                             <div className="card p-8">
                                 <h2 className="text-2xl font-bold mb-6">⚙️ הגדרות</h2>
-                                
                                 <div className="bg-purple-50 p-6 rounded-lg mb-6 border-2 border-purple-200">
-                                    <h3 className="font-bold text-purple-900 mb-4 text-lg">🔐 שינוי סיסמת מנהל</h3>
+                                    <h3 className="font-bold text-purple-900 mb-4">🔐 שינוי סיסמה</h3>
                                     <div className="space-y-4">
-                                        <div>
-                                            <label className="block text-sm font-bold mb-2 text-purple-800">סיסמה נוכחית</label>
-                                            <input type="text" value={adminPassword} readOnly className="w-full px-4 py-3 bg-white border-2 border-purple-300 rounded-lg font-mono" />
-                                        </div>
+                                        <input type="text" value={adminPassword} readOnly className="w-full px-4 py-3 bg-white border-2 rounded-lg font-mono" />
                                         <button onClick={() => {
-                                            const newPass = prompt('🔑 הזן סיסמה חדשה (לפחות 6 תווים):', adminPassword);
+                                            const newPass = prompt('סיסמה חדשה (6+ תווים):', adminPassword);
                                             if (newPass && newPass.length >= 6) {
                                                 setAdminPassword(newPass);
-                                                alert('✅ הסיסמה שונתה!\\nסיסמה חדשה: ' + newPass);
+                                                alert('✅ הסיסמה שונתה!');
                                             } else if (newPass) {
-                                                alert('❌ הסיסמה חייבת להיות לפחות 6 תווים');
+                                                alert('❌ לפחות 6 תווים');
                                             }
-                                        }} className="px-8 py-3 bg-purple-600 text-white rounded-xl font-bold hover:bg-purple-700 transition">
+                                        }} className="px-8 py-3 bg-purple-600 text-white rounded-xl font-bold hover:bg-purple-700">
                                             🔑 שנה סיסמה
                                         </button>
-                                        <p className="text-xs text-purple-700 bg-purple-100 p-3 rounded">💡 מומלץ: סיסמה בת 8+ תווים</p>
                                     </div>
                                 </div>
-
-                                <div className="bg-blue-50 p-6 rounded-lg mb-6">
-                                    <h3 className="font-bold text-blue-900 mb-3">📊 סטטיסטיקות</h3>
-                                    <p className="text-blue-800">👥 תלמידים: {users.length}</p>
-                                    <p className="text-blue-800">📢 עדכונים: {announcements.length}</p>
-                                </div>
-
                                 <div className="bg-green-50 p-6 rounded-lg">
                                     <h3 className="font-bold text-green-900 mb-3">💾 גיבוי</h3>
                                     <button onClick={() => {
-                                        const data = { users, announcements, adminPassword };
+                                        const data = { users, announcements, adminPassword, footerLinks };
                                         const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
                                         const url = URL.createObjectURL(blob);
                                         const a = document.createElement('a');
@@ -1280,6 +1398,7 @@
                             </div>
                         )}
                     </div>
+                    <Footer links={footerLinks} />
                 </div>
             );
         }
