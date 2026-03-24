@@ -50,7 +50,9 @@ body.theme-animated::before{
 body.theme-animated .logo-img{mix-blend-mode:lighten;filter:brightness(1.4) drop-shadow(0 0 8px rgba(168,85,247,.4));}
 
 /* ── APP ── */
-html,body{width:100%;min-width:320px;}
+html{width:100%;min-width:320px;}
+body{width:100%;min-width:320px;margin:0;padding:0;}
+#root{width:100%;min-width:320px;}
 .app-bg{background:var(--bg);min-height:100vh;position:relative;z-index:1;width:100%;}
 .app-hdr{
   background:var(--hdr);
@@ -547,12 +549,12 @@ function MainApp({user,updateUser,view,setView,onLogout,onLogo,reqOv,siteC}){
   return(
     <div className="app-bg">
       <header className="app-hdr">
-        <div style={{maxWidth:'1200px',width:'100%',margin:'0 auto',padding:'10px 32px',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+        <div style={{maxWidth:'1400px',width:'100%',margin:'0 auto',padding:'10px 40px',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
           {/* Logo + title — spread full width left side */}
           <div style={{display:'flex',alignItems:'center',gap:'18px'}}>
             <img onClick={onLogo} onDoubleClick={onLogo}
               src={`data:image/png;base64,${LOGO}`} alt="לוגו" className="logo-img"
-              style={{height:'110px',width:'auto',cursor:'pointer',transition:'transform .2s'}}
+              style={{height:'120px',width:'auto',cursor:'pointer',transition:'transform .2s'}}
               title="לחיצה כפולה לכניסת צוות"
               onMouseEnter={e=>e.currentTarget.style.transform='scale(1.04)'}
               onMouseLeave={e=>e.currentTarget.style.transform='scale(1)'}/>
@@ -581,8 +583,8 @@ function MainApp({user,updateUser,view,setView,onLogout,onLogo,reqOv,siteC}){
         </div>
       </header>
 
-      <div className="main-content" style={{maxWidth:'1200px',width:'100%',margin:'0 auto',padding:'20px 32px',boxSizing:'border-box'}}>
-        <nav style={{display:'flex',gap:'6px',marginBottom:'22px',overflowX:'auto',paddingBottom:'4px',flexWrap:'wrap'}}>
+      <div className="main-content" style={{maxWidth:'1400px',width:'100%',margin:'0 auto',padding:'24px 40px',boxSizing:'border-box'}}>
+        <nav style={{display:'flex',gap:'6px',marginBottom:'22px',overflowX:'auto',paddingBottom:'6px',flexWrap:'nowrap',WebkitOverflowScrolling:'touch'}}>
           {nav.map(n=>(
             <button key={n.id} onClick={()=>setView(n.id)} className="nav-tab"
               style={{
@@ -626,7 +628,7 @@ function Dashboard({user,setView,req,siteC}){
   return(
     <div style={{display:'flex',flexDirection:'column',gap:'20px'}}>
       {/* HERO */}
-      <div style={{borderRadius:'20px',padding:'30px 36px',
+      <div style={{borderRadius:'20px',padding:'36px 44px',
         background:`linear-gradient(135deg,var(--hf),var(--ht))`,color:'white',position:'relative',overflow:'hidden'}}>
         <div style={{position:'absolute',bottom:'-25px',left:'-25px',width:'130px',height:'130px',borderRadius:'50%',background:'rgba(255,255,255,0.07)'}}/>
         <div style={{position:'absolute',top:'-20px',right:'20%',width:'80px',height:'80px',borderRadius:'50%',background:'rgba(255,255,255,0.05)'}}/>
@@ -650,7 +652,7 @@ function Dashboard({user,setView,req,siteC}){
       {/* STAT CARDS */}
       <div>
         <h3 style={{fontSize:'.93rem',fontWeight:700,color:'var(--txt)',margin:'0 0 12px'}}>חובות לימוד — {yl}</h3>
-        <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(200px,1fr))',gap:'14px',width:'100%'}}>
+        <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(240px,1fr))',gap:'18px',width:'100%'}}>
           {cards.map(c=>{
             const pct=c.req>0?Math.min(100,(c.done/c.req)*100):0;
             return(
@@ -917,7 +919,7 @@ function Contacts({user}){
 function Footer({siteC}){
   return(
     <footer style={{background:'#1e2a3a',color:'white',padding:'40px 0 24px',marginTop:'40px'}}>
-      <div style={{maxWidth:'1200px',margin:'0 auto',padding:'0 32px'}}>
+      <div style={{maxWidth:'1400px',margin:'0 auto',padding:'0 40px'}}>
         <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:'32px',marginBottom:'28px',alignItems:'start'}}>
           {/* Brand */}
           <div>
@@ -1003,7 +1005,8 @@ function AdminPanel({users,setUsers,adminPw,setAdminPw,teacherPw,setTeacherPw,si
 
   if(veOpen) return <VisualEditor onClose={()=>setVeOpen(false)}
     editC={editC} setEditC={chC} editR={editR} setR={setR} getR={getR}
-    editTh={editTh} setEditTh={chTh} onSave={saveAll} saving={saving} saved={saved}/>;
+    editTh={editTh} setEditTh={chTh} onSave={saveAll} saving={saving} saved={saved}
+    users={users} reqOv={reqOv}/>;
 
   return(
     <div style={{minHeight:'100vh',background:'#0f0c29'}}>
@@ -1198,171 +1201,226 @@ function AdminPanel({users,setUsers,adminPw,setAdminPw,teacherPw,setTeacherPw,si
     </div>
   );
 }
-// ══════════ VISUAL EDITOR — Hover + Click to edit ══════════
-function VisualEditor({onClose,editC,setEditC,editR,setR,getR,editTh,setEditTh,onSave,saving,saved}){
-  const iframeRef=useRef(null);
+// ══════════ VISUAL EDITOR ══════════
+function VisualEditor({onClose,editC,setEditC,editR,setR,getR,editTh,setEditTh,onSave,saving,saved,users,reqOv}){
+  const [browseMode,setBrowseMode]=useState(true); // true=navigate, false=edit
+  const [previewView,setPreviewView]=useState('dashboard');
   const [selEl,setSelEl]=useState(null);
-  const [liveText,setLiveText]=useState('');
-  const [liveColor,setLiveColor]=useState('#333333');
-  const [status,setStatus]=useState('העבר עכבר על טקסט ולחץ עליו — יופיע מסגרת כחולה לעריכה');
-  const injectedRef=useRef(false);
+  const [selText,setSelText]=useState('');
+  const [selColor,setSelColor]=useState('');
+  const [status,setStatus]=useState('מצב ניווט — לחץ על כפתורי התפריט לניווט');
 
-  // Receive messages from iframe
-  useEffect(()=>{
-    const h=e=>{
-      if(!e.data) return;
-      if(e.data.type==='ve-sel'){
-        setSelEl(e.data);
-        setLiveText(e.data.text||'');
-        setLiveColor(e.data.color||'#333333');
-        setStatus('עורך: '+'"'+(e.data.text||'').substring(0,50)+'"');
-      }
-    };
-    window.addEventListener('message',h);
-    return()=>window.removeEventListener('message',h);
-  },[]);
-
-  const applyChange=(text,color)=>{
-    if(!selEl||!iframeRef.current) return;
-    iframeRef.current.contentWindow?.postMessage({type:'ve-set',id:selEl.elId,text,color},'*');
+  const previewUser={
+    id:'preview',name:'תלמיד לדוגמה',year:'2',gender:'female',email:'preview@test.com',
+    practical:[{id:'1',num:'1',date:'2025-01-10',open:'פגישה ראשונה',topics:'היכרות',position:'חיובי',focus:'קשר',insights:'תובנות ראשוניות',challenge:'ביסוס אמון',lessons:'לקחים'}],
+    supervision:[{id:'1',date:'2025-01-15',inst:'אורלי טוויטו',topics:'ניהול מקרה',feedback:'משוב טוב',contribution:'התפתחות',challenges:'אתגרים',selfLearn:'למידה',goals:'יעדים'}],
+    cases:[],impact:[],proficiency:[],finalProject:null,yearHistory:[]
   };
+  const req=gReq(previewUser.gender,previewUser.year,reqOv);
 
-  const onIframeLoad=()=>{
-    if(injectedRef.current) return;
-    try{
-      const doc=iframeRef.current?.contentDocument;
-      if(!doc||!doc.body){setTimeout(()=>{injectedRef.current=false;onIframeLoad();},500);return;}
-      injectedRef.current=true;
+  useEffect(()=>{
+    document.body.className='theme-'+editTh;
+  },[editTh]);
 
-      // Add edit style
-      const st=doc.createElement('style');
-      st.textContent=`
-        [data-ve-id]{cursor:pointer!important;}
-        [data-ve-id]:hover{outline:2px dashed #4a6fa599!important;outline-offset:2px!important;}
-        [data-ve-active]{outline:2px solid #4a6fa5!important;outline-offset:2px!important;background:rgba(74,111,165,.04)!important;}
-      `;
-      doc.head.appendChild(st);
+  // Click handler — only active in edit mode
+  const handleClick=e=>{
+    if(browseMode){
+      // In browse mode: allow nav button clicks
+      const btn=e.target.closest('button[data-view]');
+      if(btn){ setPreviewView(btn.dataset.view); }
+      return;
+    }
+    // Edit mode
+    const el=e.target;
+    if(['BUTTON','A','INPUT','TEXTAREA','SELECT','IMG','SVG','PATH'].includes(el.tagName)) return;
+    const txt=(el.innerText||'').trim();
+    if(!txt || txt.length>300 || txt.length<1) return;
+    e.stopPropagation(); e.preventDefault();
 
-      const sc=doc.createElement('script');
-      sc.textContent=`
-(function(){
-  if(window.__veLoaded) return;
-  window.__veLoaded=true;
+    // Deselect previous
+    if(selEl){
+      const prev=document.querySelector('[data-ve-editing]');
+      if(prev){prev.removeAttribute('data-ve-editing');prev.style.outline='';prev.contentEditable='inherit';}
+    }
 
-  // Tag all editable text nodes
-  let n=0;
-  const TAGS=['P','H1','H2','H3','H4','SPAN','DIV','BUTTON','LABEL','LI','TD','TH'];
-  function tagAll(root){
-    (root||document).querySelectorAll('*').forEach(el=>{
-      if(el.dataset&&el.dataset.veId) return;
-      if(!TAGS.includes(el.tagName)) return;
-      // Only tag leaf-ish text nodes
-      const txt=(el.innerText||'').trim();
-      if(txt.length>0&&txt.length<250&&el.children.length<=2){
-        el.dataset.veId='ve'+(++n);
-      }
-    });
-  }
-  tagAll();
-
-  // Single click to select
-  document.addEventListener('click',function(e){
-    const el=e.target.closest('[data-ve-id]');
-    if(!el) return;
-    e.preventDefault();e.stopPropagation();
-    document.querySelectorAll('[data-ve-active]').forEach(x=>{
-      x.removeAttribute('data-ve-active');
-      x.contentEditable='inherit';
-    });
-    el.setAttribute('data-ve-active','1');
+    // Mark new selection
+    el.setAttribute('data-ve-editing','1');
+    el.style.outline='2px solid var(--a1)';
+    el.style.outlineOffset='2px';
+    el.style.cursor='text';
     el.contentEditable='true';
     el.focus();
-    // Select all text
-    const range=document.createRange();
-    range.selectNodeContents(el);
-    const sel=window.getSelection();
-    sel.removeAllRanges();sel.addRange(range);
+    try{const r=document.createRange();r.selectNodeContents(el);const s=window.getSelection();s.removeAllRanges();s.addRange(r);}catch(e){}
+
     const cs=window.getComputedStyle(el);
-    window.parent.postMessage({
-      type:'ve-sel',elId:el.dataset.veId,
-      tagName:el.tagName,
-      text:el.innerText||'',
-      color:cs.color,
-    },'*');
-  },true);
-
-  // Listen for text/color updates from parent
-  window.addEventListener('message',function(e){
-    if(!e.data||e.data.type!=='ve-set') return;
-    const el=document.querySelector('[data-ve-id="'+e.data.id+'"]');
-    if(!el) return;
-    if(typeof e.data.text==='string') el.innerText=e.data.text;
-    if(e.data.color) el.style.color=e.data.color;
-  });
-
-  // Block nav/form submit inside iframe
-  document.addEventListener('submit',e=>e.preventDefault(),true);
-  document.addEventListener('click',function(e){
-    const a=e.target.closest('a');
-    if(a) e.preventDefault();
-  },false);
-})();
-      `;
-      doc.head.appendChild(sc);
-      setStatus('מוכן — לחץ על כל טקסט לעריכה ישירה');
-    }catch(err){
-      setStatus('שגיאה: '+err.message+' — נסה לשמור ולפתוח מחדש');
-    }
+    setSelEl(el);
+    setSelText(txt);
+    setSelColor(cs.color||'#333333');
+    setStatus('עורך: "'+txt.substring(0,40)+'"');
   };
 
+  const applyText=v=>{
+    setSelText(v);
+    const el=document.querySelector('[data-ve-editing]');
+    if(el) el.innerText=v;
+  };
+  const applyColor=v=>{
+    setSelColor(v);
+    const el=document.querySelector('[data-ve-editing]');
+    if(el) el.style.color=v;
+  };
+
+  const toggleMode=()=>{
+    if(!browseMode){
+      // Leaving edit mode — deselect
+      const el=document.querySelector('[data-ve-editing]');
+      if(el){el.removeAttribute('data-ve-editing');el.style.outline='';el.contentEditable='inherit';}
+      setSelEl(null);
+    }
+    setBrowseMode(!browseMode);
+    setStatus(!browseMode ? 'מצב ניווט — לחץ על כפתורי התפריט לניווט' : 'מצב עריכה — לחץ על כל טקסט לעריכה');
+  };
+
+  const isFem=previewUser.gender==='female';
+  const yr=parseInt(previewUser.year);
+  const navItems=[
+    {id:'dashboard',l:'סקירה'},{id:'practical',l:'שעות התנסות'},
+    {id:'supervision',l:'הדרכות אישיות'},{id:'case',l:'הצגת מקרה'},
+    {id:'impact',l:'שעות משפיעות'},{id:'contacts',l:'אנשי קשר'},
+  ];
+
   return(
-    <div style={{position:'fixed',inset:0,zIndex:9999,display:'flex',flexDirection:'column',background:'#0a0a1a'}}>
-      {/* TOP BAR */}
-      <div style={{background:'#1e1b4b',color:'white',padding:'10px 20px',display:'flex',alignItems:'center',gap:'12px',flexShrink:0,borderBottom:'1px solid rgba(255,255,255,.1)',flexWrap:'wrap'}}>
-        <span style={{fontWeight:800,fontSize:'.93rem',whiteSpace:'nowrap'}}>עורך ויזואלי</span>
-        <div style={{flex:1,minWidth:0}}>
-          <p style={{margin:0,fontSize:'.76rem',color:'rgba(255,255,255,.55)',overflow:'hidden',whiteSpace:'nowrap',textOverflow:'ellipsis'}}>{status}</p>
+    <div style={{position:'fixed',inset:0,zIndex:9999,display:'flex',flexDirection:'column'}}>
+      {/* ── TOP BAR ── */}
+      <div style={{background:'#1e1b4b',color:'white',padding:'9px 16px',display:'flex',alignItems:'center',gap:'10px',flexShrink:0,zIndex:10001,borderBottom:'1px solid rgba(255,255,255,.1)',flexWrap:'wrap'}}>
+        <span style={{fontWeight:800,fontSize:'.9rem',whiteSpace:'nowrap'}}>עורך ויזואלי</span>
+
+        {/* MODE TOGGLE — the main control */}
+        <button onClick={toggleMode} style={{
+          padding:'6px 16px',borderRadius:'20px',fontWeight:700,fontSize:'.84rem',
+          cursor:'pointer',border:'2px solid',transition:'all .2s',whiteSpace:'nowrap',
+          background: browseMode ? 'rgba(255,255,255,.15)' : '#4a6fa5',
+          borderColor: browseMode ? 'rgba(255,255,255,.3)' : '#4a6fa5',
+          color:'white',
+          boxShadow: !browseMode ? '0 0 12px rgba(74,111,165,.5)' : 'none'
+        }}>
+          {browseMode ? '🔍 מצב ניווט — לחץ לעריכה' : '✏️ מצב עריכה — לחץ לניווט'}
+        </button>
+
+        <span style={{fontSize:'.73rem',color:'rgba(255,255,255,.45)',flex:1,minWidth:0,overflow:'hidden',whiteSpace:'nowrap',textOverflow:'ellipsis'}}>
+          {status}
+        </span>
+
+        {/* Theme switcher */}
+        <div style={{display:'flex',gap:'4px'}}>
+          {Object.entries(THEMES).map(([k,t])=>(
+            <button key={k} onClick={()=>setEditTh(k)}
+              style={{padding:'4px 8px',borderRadius:'6px',fontSize:'.7rem',fontWeight:700,border:'none',cursor:'pointer',
+                background:editTh===k?'white':'rgba(255,255,255,.12)',
+                color:editTh===k?'#3d5a8a':'rgba(255,255,255,.75)'}}>
+              {t.label.split(' ')[0]}
+            </button>
+          ))}
         </div>
 
-        {selEl&&(
-          <div style={{display:'flex',alignItems:'center',gap:'8px',background:'rgba(255,255,255,.08)',borderRadius:'9px',padding:'6px 12px',flexWrap:'wrap'}}>
-            <span style={{fontSize:'.72rem',color:'rgba(255,255,255,.45)',whiteSpace:'nowrap'}}>{selEl.tagName}:</span>
-            <input value={liveText} onChange={e=>{setLiveText(e.target.value);applyChange(e.target.value,liveColor);}}
-              style={{padding:'5px 10px',borderRadius:'7px',background:'rgba(255,255,255,.12)',border:'1px solid rgba(255,255,255,.2)',color:'white',fontFamily:'Heebo,sans-serif',fontSize:'.88rem',minWidth:'180px',maxWidth:'300px'}}
+        {/* Edit controls */}
+        {!browseMode && selEl && (
+          <div style={{display:'flex',alignItems:'center',gap:'7px',background:'rgba(255,255,255,.08)',padding:'5px 10px',borderRadius:'8px',flexWrap:'wrap'}}>
+            <input value={selText} onChange={e=>applyText(e.target.value)}
+              style={{padding:'4px 9px',borderRadius:'6px',background:'rgba(255,255,255,.12)',border:'1px solid rgba(255,255,255,.2)',color:'white',fontFamily:'Heebo,sans-serif',fontSize:'.85rem',minWidth:'140px',maxWidth:'260px'}}
               placeholder="טקסט..."/>
-            <div style={{display:'flex',alignItems:'center',gap:'5px'}}>
-              <span style={{fontSize:'.72rem',color:'rgba(255,255,255,.45)'}}>צבע:</span>
-              <input type="color" value={liveColor}
-                onChange={e=>{setLiveColor(e.target.value);applyChange(liveText,e.target.value);}}
-                style={{width:'32px',height:'28px',borderRadius:'5px',border:'none',cursor:'pointer',padding:'1px'}}/>
-            </div>
+            <label style={{fontSize:'.7rem',color:'rgba(255,255,255,.45)'}}>צבע:</label>
+            <input type="color" value={selColor||'#333333'} onChange={e=>applyColor(e.target.value)}
+              style={{width:'28px',height:'24px',borderRadius:'4px',border:'none',cursor:'pointer',padding:'1px'}}/>
           </div>
         )}
 
         <button onClick={onSave} disabled={saving}
-          style={{padding:'7px 16px',borderRadius:'8px',background:saved?'#10b981':'#4a6fa5',color:'white',fontWeight:700,border:'none',cursor:'pointer',fontSize:'.84rem',whiteSpace:'nowrap'}}>
-          {saving?'שומר...':saved?'נשמר! ✓':'שמור לFirebase'}
+          style={{padding:'6px 14px',borderRadius:'7px',background:saved?'#10b981':'#4a6fa5',color:'white',fontWeight:700,border:'none',cursor:'pointer',fontSize:'.82rem',whiteSpace:'nowrap'}}>
+          {saving?'שומר...':saved?'נשמר ✓':'שמור'}
         </button>
-        <button onClick={onClose}
-          style={{padding:'7px 12px',borderRadius:'8px',background:'rgba(239,68,68,.75)',color:'white',fontWeight:700,border:'none',cursor:'pointer',whiteSpace:'nowrap'}}>סגור</button>
+        <button onClick={()=>{
+          const el=document.querySelector('[data-ve-editing]');
+          if(el){el.removeAttribute('data-ve-editing');el.style.outline='';el.contentEditable='inherit';}
+          onClose();
+        }} style={{padding:'6px 11px',borderRadius:'7px',background:'rgba(239,68,68,.75)',color:'white',fontWeight:700,border:'none',cursor:'pointer'}}>סגור</button>
       </div>
 
-      {/* IFRAME */}
-      <div style={{flex:1,position:'relative',overflow:'hidden'}}>
-        <iframe ref={iframeRef} src={window.location.href}
-          style={{width:'100%',height:'100%',border:'none'}} onLoad={onIframeLoad}/>
-        {!selEl&&(
-          <div style={{position:'absolute',bottom:'16px',left:'50%',transform:'translateX(-50%)',
-            background:'rgba(30,27,75,.85)',color:'white',padding:'8px 18px',borderRadius:'20px',
-            fontSize:'.78rem',backdropFilter:'blur(6px)',pointerEvents:'none',zIndex:10,
-            border:'1px solid rgba(255,255,255,.15)',whiteSpace:'nowrap'}}>
-            לחץ על כל טקסט לעריכה ישירה
+      {/* ── PREVIEW AREA ── */}
+      <div style={{flex:1,overflowY:'auto',overflowX:'hidden',background:'var(--bg)',cursor:browseMode?'default':'crosshair'}}
+        onClick={handleClick}>
+
+        {/* Edit mode overlay hint */}
+        {!browseMode && (
+          <div style={{position:'sticky',top:0,zIndex:500,background:'rgba(74,111,165,.12)',
+            borderBottom:'2px dashed rgba(74,111,165,.4)',padding:'6px 20px',
+            fontSize:'.78rem',color:'var(--a1)',fontWeight:600,textAlign:'center',
+            backdropFilter:'blur(4px)'}}>
+            מצב עריכה פעיל — לחץ על כל טקסט לעריכה ישירה
           </div>
         )}
+
+        {/* Fake header */}
+        <div className="app-hdr" style={{position:'sticky',top:browseMode?0:'34px',zIndex:100}}>
+          <div style={{maxWidth:'1400px',width:'100%',margin:'0 auto',padding:'10px 40px',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+            <div style={{display:'flex',alignItems:'center',gap:'18px'}}>
+              <img src={`data:image/png;base64,${LOGO}`} className="logo-img" style={{height:'100px',width:'auto'}}/>
+              <div style={{borderRight:'2px solid var(--brd)',paddingRight:'18px'}}>
+                <div style={{fontWeight:800,fontSize:'1.1rem',color:'var(--txt)'}}>{editC.title||'מכללת תורת הנפש'}</div>
+                <div style={{fontSize:'.72rem',color:'var(--sub)'}}>{editC.subtitle||'יומן תלמיד-ה | מעקב הכשרה'}</div>
+              </div>
+            </div>
+            <div style={{display:'flex',alignItems:'center',gap:'14px'}}>
+              <div style={{textAlign:'right'}}>
+                <div style={{fontWeight:700,fontSize:'.9rem',color:'var(--txt)'}}>{previewUser.name}</div>
+                <div style={{fontSize:'.72rem',color:'var(--sub)'}}>שנה ב'</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Fake nav — clickable in browse mode */}
+        <div style={{background:'var(--bg)',borderBottom:'1px solid var(--brd)',padding:'10px 40px',
+          display:'flex',gap:'6px',overflowX:'auto',position:'sticky',top:browseMode?'120px':'154px',zIndex:99}}>
+          <div style={{maxWidth:'1400px',width:'100%',margin:'0 auto',display:'flex',gap:'6px',flexWrap:'nowrap'}}>
+            {navItems.map(n=>(
+              <button key={n.id} data-view={n.id}
+                onClick={e=>{if(browseMode){e.stopPropagation();setPreviewView(n.id);}}}
+                className="nav-tab"
+                style={{
+                  background:previewView===n.id?`linear-gradient(135deg,var(--nf),var(--nt))`:'var(--card)',
+                  color:previewView===n.id?'white':'var(--txt)',
+                  border:previewView===n.id?'none':'1px solid var(--brd)',
+                  cursor:browseMode?'pointer':'crosshair',
+                  pointerEvents: browseMode?'auto':'none'
+                }}>
+                {n.l}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Content */}
+        <div style={{maxWidth:'1400px',width:'100%',margin:'0 auto',padding:'24px 40px',boxSizing:'border-box',
+          pointerEvents: browseMode ? 'none' : 'auto'}}>
+          {previewView==='dashboard' && <Dashboard user={previewUser} setView={()=>{}} req={req} siteC={editC}/>}
+          {previewView==='practical'  && <PracticalHours user={previewUser} updateUser={()=>{}} req={req}/>}
+          {previewView==='supervision'&& <SupervisionHours user={previewUser} updateUser={()=>{}} req={req}/>}
+          {previewView==='case'       && <CasePresentation user={previewUser} updateUser={()=>{}} req={req}/>}
+          {previewView==='impact'     && <ImpactHours user={previewUser} updateUser={()=>{}} req={req}/>}
+          {previewView==='contacts'   && <Contacts user={previewUser}/>}
+        </div>
+        <Footer siteC={editC}/>
+      </div>
+
+      {/* Bottom hint */}
+      <div style={{background:'#1e1b4b',padding:'5px 16px',textAlign:'center',fontSize:'.72rem',color:'rgba(255,255,255,.35)',flexShrink:0}}>
+        {browseMode ? 'מצב ניווט — לחץ על כפתורי התפריט לניווט בין הדפים' : 'מצב עריכה — לחץ על כל טקסט לעריכה ישירה'}
       </div>
     </div>
   );
 }
+
 
 ReactDOM.render(<App/>,document.getElementById('root'));
 </script>
