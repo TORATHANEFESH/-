@@ -8,13 +8,16 @@
 <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
 <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 <script src="https://cdn.tailwindcss.com"></script>
-<link href="https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Heebo:wght@300;400;500;600;700;800&family=Assistant:wght@300;400;600;700;800&family=Rubik:wght@300;400;500;600;700&family=Varela+Round&family=Frank+Ruhl+Libre:wght@300;400;500;700&family=Secular+One&family=Bellefair&family=Amatic+SC:wght@400;700&family=Suez+One&family=Noto+Sans+Hebrew:wght@300;400;600;700&family=Noto+Serif+Hebrew:wght@300;400;700&family=Tinos:wght@400;700&family=Arimo:wght@400;600;700&family=Cousine&display=swap" rel="stylesheet">
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-storage-compat.js"></script>
 <style>
-*{font-family:'Heebo',sans-serif;box-sizing:border-box;}
+*{box-sizing:border-box;}
+body{font-family:'Assistant',sans-serif;}
+h1,h2,h3,h4,h5,h6{font-family:'Heebo',sans-serif;}
+input,textarea,select,button{font-family:'Assistant',sans-serif;}
 body{margin:0;min-height:100vh;}
 
 /* ── THEMES ── */
@@ -92,7 +95,7 @@ body.theme-animated .stat-card:hover{box-shadow:0 10px 28px rgba(168,85,247,.2);
 .fl-label{display:block;font-size:.8rem;font-weight:700;color:var(--txt);margin-bottom:5px;}
 .fl-label.req::after{content:' *';color:#ef4444;}
 input,textarea,select{
-  font-family:'Heebo',sans-serif;width:100%;
+  width:100%;
   padding:11px 14px;border:2px solid var(--brd);
   border-radius:11px;background:var(--card);color:var(--txt);
   font-size:.9rem;transition:border-color .2s;
@@ -222,20 +225,36 @@ function App(){
   const [logoClicks,setLogoClicks]=useState([]);
 
   useEffect(()=>{
-    db.collection('settings').doc('general').get().then(d=>{
-      if(d.exists){
-        const v=d.data();
-        if(v.adminPassword) setAdminPw(v.adminPassword);
-        if(v.teacherPassword) setTeacherPw(v.teacherPassword);
-        if(v.theme){setTheme(v.theme);document.body.className='theme-'+v.theme;}
-      }
-    }).catch(console.error);
-    db.collection('settings').doc('siteContent').get().then(d=>{
-      if(d.exists){setSiteC(d.data().content||{});setReqOv(d.data().reqOv||{});}
-    }).catch(console.error);
-    db.collection('users').get().then(s=>{
-      const a=[];s.forEach(d=>a.push({id:d.id,...d.data()}));setUsers(a);
-    }).catch(console.error);
+    const loadAll=()=>{
+      db.collection('settings').doc('general').get().then(d=>{
+        if(d.exists){
+          const v=d.data();
+          if(v.adminPassword) setAdminPw(v.adminPassword);
+          if(v.teacherPassword) setTeacherPw(v.teacherPassword);
+          if(v.theme){setTheme(v.theme);document.body.className='theme-'+v.theme;}
+        }
+      }).catch(console.error);
+      db.collection('settings').doc('siteContent').get().then(d=>{
+        if(d.exists){
+          const cont=d.data().content||{};
+          setSiteC(cont); setReqOv(d.data().reqOv||{});
+          if(cont.bodyFont) document.body.style.fontFamily=`'${cont.bodyFont}',sans-serif`;
+          if(cont.headingFont){
+            const applyHF=()=>document.querySelectorAll('h1,h2,h3,h4').forEach(el=>el.style.fontFamily=`'${cont.headingFont}',sans-serif`);
+            applyHF(); setTimeout(applyHF,500);
+          }
+        }
+      }).catch(console.error);
+      db.collection('users').get().then(s=>{
+        const a=[];s.forEach(d=>a.push({id:d.id,...d.data()}));setUsers(a);
+      }).catch(console.error);
+    };
+    // Sign in anonymously first so Firestore rules allow reads
+    if(auth.currentUser){
+      loadAll();
+    } else {
+      auth.signInAnonymously().then(loadAll).catch(loadAll);
+    }
   },[]);
 
   useEffect(()=>{document.body.className='theme-'+theme;},[theme]);
@@ -296,6 +315,16 @@ function App(){
 function TeacherPanel({users,setIsTeacher,setView}){
   const [sel,setSel]=useState(null);
   const [uploads,setUploads]=useState([]);
+  const [localUsers,setLocalUsers]=useState(users);
+
+  useEffect(()=>{
+    // Always reload from Firestore for fresh data
+    db.collection('users').get().then(s=>{
+      const a=[];s.forEach(d=>a.push({id:d.id,...d.data()}));
+      if(a.length>0) setLocalUsers(a);
+      else if(users.length>0) setLocalUsers(users);
+    }).catch(()=>{if(users.length>0) setLocalUsers(users);});
+  },[]);
 
   useEffect(()=>{
     // Load file uploads from Firestore
@@ -315,7 +344,7 @@ function TeacherPanel({users,setIsTeacher,setView}){
     <div style={{minHeight:'100vh',background:'#f7f5fb'}}>
       <header style={{background:'linear-gradient(135deg,#3d5a8a,#7b4fa6)',padding:'14px 32px',color:'white',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
         <div>
-          <h1 style={{margin:'0 0 2px',fontSize:'1.1rem',fontWeight:800}}>תצוגת מחנך</h1>
+          <h1 style={{margin:'0 0 2px',fontSize:'1.1rem',fontWeight:800}}>תצוגת מחנך ({localUsers.length} תלמידים)</h1>
           <p style={{margin:0,fontSize:'.77rem',opacity:.8}}>מכללת תורת הנפש</p>
         </div>
         <button onClick={()=>{setIsTeacher(false);setView('login');}} style={{padding:'8px 18px',borderRadius:'9px',background:'rgba(255,255,255,.2)',color:'white',fontWeight:700,border:'1px solid rgba(255,255,255,.3)',cursor:'pointer'}}>יציאה</button>
@@ -325,10 +354,10 @@ function TeacherPanel({users,setIsTeacher,setView}){
           {/* Student list */}
           <div style={{background:'white',borderRadius:'14px',padding:'16px',boxShadow:'0 2px 12px rgba(0,0,0,.06)',height:'fit-content'}}>
             <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'14px'}}>
-              <h3 style={{margin:0,fontSize:'.9rem',fontWeight:700,color:'#374151'}}>תלמידים ({users.length})</h3>
+              <h3 style={{margin:0,fontSize:'.9rem',fontWeight:700,color:'#374151'}}>תלמידים ({localUsers.length})</h3>
               {unseenCount>0&&<span style={{padding:'2px 8px',borderRadius:'20px',background:'#ef4444',color:'white',fontSize:'.73rem',fontWeight:700}}>●{unseenCount} חדש</span>}
             </div>
-            {users.map(u=>{
+            {localUsers.map(u=>{
               const hasNew=uploads.filter(up=>up.studentId===u.id&&!up.seen).length>0;
               return(
                 <div key={u.id} onClick={()=>setSel(u.id)}
@@ -447,11 +476,11 @@ function LoginPage({users,setUsers,setCur,onLogo}){
 
   // Animated particles
   const circles=[
-    {w:600,h:600,top:'-200px',right:'-150px',bg:'rgba(102,126,234,0.18)',dur:'20s',anim:'floatA'},
-    {w:450,h:450,bottom:'-150px',left:'-100px',bg:'rgba(118,75,162,0.18)',dur:'25s',anim:'floatB'},
-    {w:300,h:300,top:'40%',left:'30%',bg:'rgba(168,85,247,0.1)',dur:'15s',anim:'floatC'},
-    {w:200,h:200,top:'15%',left:'55%',bg:'rgba(6,182,212,0.1)',dur:'18s',anim:'floatB'},
-    {w:350,h:350,bottom:'10%',right:'20%',bg:'rgba(99,102,241,0.12)',dur:'22s',anim:'floatA'},
+    {w:580,h:580,top:'-180px',right:'-140px',bg:'rgba(102,126,234,0.18)',dur:'13s',del:'0s'},
+    {w:440,h:440,bottom:'-140px',left:'-90px',bg:'rgba(118,75,162,0.18)',dur:'13s',del:'2.6s'},
+    {w:290,h:290,top:'38%',left:'28%',bg:'rgba(168,85,247,0.1)',dur:'13s',del:'5.2s'},
+    {w:190,h:190,top:'13%',left:'53%',bg:'rgba(6,182,212,0.1)',dur:'13s',del:'7.8s'},
+    {w:340,h:340,bottom:'8%',right:'18%',bg:'rgba(99,102,241,0.12)',dur:'13s',del:'10.4s'},
   ];
   const sparkles=[];
 
@@ -459,11 +488,11 @@ function LoginPage({users,setUsers,setCur,onLogo}){
     <div style={{minHeight:'100vh',display:'flex',alignItems:'center',justifyContent:'center',padding:'24px',
       background:'linear-gradient(135deg,#1a1a2e 0%,#16213e 40%,#0f3460 70%,#533483 100%)',
       position:'relative',overflow:'hidden'}}>
-      {circles.map((c,i)=>(
-        <div key={i} style={{position:'absolute',width:`${c.w}px`,height:`${c.h}px`,
-          top:c.top,bottom:c.bottom,right:c.right,left:c.left,
-          background:c.bg,borderRadius:'50%',
-          animation:`${c.anim} ${c.dur} infinite ease-in-out`,
+      {circles.map((s,i)=>(
+        <div key={i} style={{position:'absolute',width:`${s.w}px`,height:`${s.h}px`,
+          top:s.top,bottom:s.bottom,right:s.right,left:s.left,
+          background:s.bg,borderRadius:'50%',
+          animation:`floatA ${s.dur} ${s.del} infinite ease-in-out`,
           pointerEvents:'none',zIndex:0}}/>
       ))}
 
@@ -956,6 +985,13 @@ function Footer({siteC}){
 // ══════════ ADMIN PANEL ══════════
 function AdminPanel({users,setUsers,adminPw,setAdminPw,teacherPw,setTeacherPw,siteC,reqOv,saveSite,setIsAdmin,setView,theme,saveTheme}){
   const [tab,setTab]=useState('students');
+  // Reload users from Firestore if not loaded yet
+  useEffect(()=>{
+    db.collection('users').get().then(s=>{
+      const a=[];s.forEach(d=>a.push({id:d.id,...d.data()}));
+      if(a.length>0) setUsers(a);
+    }).catch(console.error);
+  },[]);
   const [editC,setEditC]=useState({...siteC});
   const [editR,setEditR]=useState({...reqOv});
   const [editTh,setEditTh]=useState(theme);
@@ -1003,7 +1039,17 @@ function AdminPanel({users,setUsers,adminPw,setAdminPw,teacherPw,setTeacherPw,si
     ...(u.practical||[]).filter(p=>p.att).map(p=>({uid:u.id,uname:u.name,cat:'קובץ דיווח',...p.att}))
   ]).filter(Boolean);
 
-  if(veOpen) return <VisualEditor onClose={()=>setVeOpen(false)}
+  if(veOpen==='chooser') return <VisualEditorChooser
+    onClose={()=>setVeOpen(false)}
+    onChooseLogin={()=>setVeOpen('login')}
+    onChooseMain={()=>setVeOpen('main')}/>;
+
+  if(veOpen==='login') return <LoginEditor
+    onClose={()=>setVeOpen(false)}
+    onSave={saveAll} saving={saving} saved={saved}
+    editC={editC} setEditC={chC}/>;
+
+  if(veOpen==='main') return <VisualEditor onClose={()=>setVeOpen(false)}
     editC={editC} setEditC={chC} editR={editR} setR={setR} getR={getR}
     editTh={editTh} setEditTh={chTh} onSave={saveAll} saving={saving} saved={saved}
     users={users} reqOv={reqOv}/>;
@@ -1026,7 +1072,7 @@ function AdminPanel({users,setUsers,adminPw,setAdminPw,teacherPw,setTeacherPw,si
               boxShadow:dirty?'0 0 10px rgba(251,191,36,.35)':'none'}}>
               {saving?'שומר...':saved?'נשמר! ✓':dirty?'שמור שינויים ●':'שמור שינויים'}
             </button>
-            <button onClick={()=>setVeOpen(true)} style={{padding:'8px 15px',borderRadius:'9px',background:'rgba(255,255,255,.15)',color:'white',fontWeight:600,border:'1px solid rgba(255,255,255,.25)',cursor:'pointer',fontSize:'.84rem'}}>עורך ויזואלי</button>
+            <button onClick={()=>setVeOpen('chooser')} style={{padding:'8px 15px',borderRadius:'9px',background:'rgba(255,255,255,.15)',color:'white',fontWeight:600,border:'1px solid rgba(255,255,255,.25)',cursor:'pointer',fontSize:'.84rem'}}>עורך ויזואלי</button>
             <button onClick={()=>{setIsAdmin(false);setView('dashboard');}} style={{padding:'8px 15px',borderRadius:'9px',background:'white',color:'#3d5a8a',fontWeight:700,border:'none',cursor:'pointer',fontSize:'.84rem'}}>יציאה</button>
           </div>
         </div>
@@ -1048,10 +1094,10 @@ function AdminPanel({users,setUsers,adminPw,setAdminPw,teacherPw,setTeacherPw,si
         {tab==='students'&&(
           <div style={{background:'white',borderRadius:'14px',overflow:'hidden'}}>
             <div style={{padding:'16px 20px',borderBottom:'1px solid #e5e7eb'}}><h2 style={{margin:0,fontSize:'.97rem',fontWeight:700}}>תלמידים ({users.length})</h2></div>
-            {!users.length?<p style={{textAlign:'center',color:'#9ca3af',padding:'36px'}}>אין תלמידים</p>:(
+            {!users.length?<p style={{textAlign:'center',color:'#9ca3af',padding:'36px'}}>טוען תלמידים מ-Firebase... (אם לא מופיע תוכן, רענן את הדף)</p>:(
               <div style={{overflowX:'auto'}}>
                 <table style={{width:'100%',borderCollapse:'collapse',fontSize:'.85rem'}}>
-                  <thead><tr style={{background:'#f9fafb'}}>{['שם','שנה','מגדר','אימייל','התנסות','הדרכות','הצגות מקרה','שינוי שנה'].map(h=><th key={h} style={{padding:'10px 13px',textAlign:'right',fontWeight:700,color:'#374151',whiteSpace:'nowrap'}}>{h}</th>)}</tr></thead>
+                  <thead><tr style={{background:'#f9fafb'}}>{['שם','שנה','מגדר','אימייל','התנסות','הדרכות','הצגות מקרה','שינוי שנה','מחיקה'].map(h=><th key={h} style={{padding:'10px 13px',textAlign:'right',fontWeight:700,color:'#374151',whiteSpace:'nowrap'}}>{h}</th>)}</tr></thead>
                   <tbody>{users.map((u,i)=>(
                     <tr key={u.id} style={{background:i%2===0?'white':'#fafafa',borderTop:'1px solid #e5e7eb'}}>
                       <td style={{padding:'10px 13px',fontWeight:600}}>{u.name}</td>
@@ -1062,9 +1108,33 @@ function AdminPanel({users,setUsers,adminPw,setAdminPw,teacherPw,setTeacherPw,si
                       <td style={{padding:'10px 13px',fontWeight:600}}>{(u.supervision||[]).length}</td>
                       <td style={{padding:'10px 13px',fontWeight:600}}>{(u.cases||[]).length}</td>
                       <td style={{padding:'10px 13px'}}>
-                        <select value={u.year} onChange={e=>upYear(u.id,e.target.value)} style={{padding:'5px 8px',borderRadius:'7px',border:'1px solid #d1d5db',fontSize:'.81rem',fontFamily:'Heebo,sans-serif'}}>
+                        <select value={u.year} onChange={e=>upYear(u.id,e.target.value)} style={{padding:'5px 8px',borderRadius:'7px',border:'1px solid #d1d5db',fontSize:'.81rem',fontFamily:'Assistant,sans-serif'}}>
                           <option value="2">שנה ב'</option><option value="3">שנה ג'</option><option value="4">שנה ד'</option>
                         </select>
+                      </td>
+                      <td style={{padding:'10px 13px'}}>
+                        <div style={{display:'flex',gap:'5px'}}>
+                          <button onClick={()=>{
+                            const newName=prompt('שם חדש:',u.name);
+                            if(newName&&newName.trim()){
+                              const upd=users.map(x=>x.id===u.id?{...x,name:newName.trim()}:x);
+                              setUsers(upd);
+                              db.collection('users').doc(u.id).update({name:newName.trim()}).catch(console.error);
+                            }
+                          }} style={{padding:'4px 9px',borderRadius:'7px',background:'rgba(74,111,165,.1)',color:'#4a6fa5',fontWeight:700,border:'1px solid rgba(74,111,165,.2)',cursor:'pointer',fontSize:'.79rem',whiteSpace:'nowrap'}}>
+                            ✏️ ערוך
+                          </button>
+                          <button onClick={()=>{
+                            if(confirm(`למחוק את ${u.name}? פעולה זו אינה הפיכה.`)){
+                              db.collection('users').doc(u.id).delete().then(()=>{
+                                setUsers(users.filter(x=>x.id!==u.id));
+                                alert('התלמיד נמחק');
+                              }).catch(e=>alert('שגיאה: '+e.message));
+                            }
+                          }} style={{padding:'4px 9px',borderRadius:'7px',background:'rgba(239,68,68,.1)',color:'#ef4444',fontWeight:700,border:'1px solid rgba(239,68,68,.2)',cursor:'pointer',fontSize:'.79rem',whiteSpace:'nowrap'}}>
+                            🗑 מחק
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))}</tbody>
@@ -1134,6 +1204,27 @@ function AdminPanel({users,setUsers,adminPw,setAdminPw,teacherPw,setTeacherPw,si
               ערוך ולחץ <b style={{color:'#fbbf24'}}>"שמור שינויים"</b> בסרגל הכלים
             </div>
             <div style={{background:'white',borderRadius:'13px',padding:'20px'}}>
+              <h3 style={{margin:'0 0 14px',fontSize:'.93rem',fontWeight:700}}>פונטים</h3>
+              <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'12px',marginBottom:'20px'}}>
+                <div>
+                  <label style={{display:'block',fontSize:'.79rem',fontWeight:700,color:'#374151',marginBottom:'4px'}}>גוף טקסט</label>
+                  <select value={editC.bodyFont||'Assistant'} onChange={e=>{chC({...editC,bodyFont:e.target.value});document.body.style.fontFamily=`'${e.target.value}',sans-serif`;}}
+                    style={{width:'100%',padding:'9px 13px',border:'2px solid #e5e7eb',borderRadius:'9px',fontFamily:'Assistant,sans-serif',boxSizing:'border-box'}}>
+                    {['Assistant','Heebo','Rubik','Varela Round','Frank Ruhl Libre','Secular One','Bellefair','Amatic SC','Suez One','Noto Sans Hebrew','Noto Serif Hebrew','Tinos','Arimo','Cousine'].map(f=>(
+                      <option key={f} value={f} style={{fontFamily:f}}>{f}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label style={{display:'block',fontSize:'.79rem',fontWeight:700,color:'#374151',marginBottom:'4px'}}>כותרות</label>
+                  <select value={editC.headingFont||'Heebo'} onChange={e=>{chC({...editC,headingFont:e.target.value});document.querySelectorAll('h1,h2,h3').forEach(el=>el.style.fontFamily=`'${e.target.value}',sans-serif`);}}
+                    style={{width:'100%',padding:'9px 13px',border:'2px solid #e5e7eb',borderRadius:'9px',fontFamily:'Assistant,sans-serif',boxSizing:'border-box'}}>
+                    {['Heebo','Assistant','Rubik','Varela Round','Frank Ruhl Libre','Secular One','Bellefair','Amatic SC','Suez One','Noto Sans Hebrew','Noto Serif Hebrew','Tinos','Arimo','Cousine'].map(f=>(
+                      <option key={f} value={f} style={{fontFamily:f}}>{f}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
               <h3 style={{margin:'0 0 14px',fontSize:'.93rem',fontWeight:700}}>כותרות האתר</h3>
               <div style={{display:'flex',flexDirection:'column',gap:'11px'}}>
                 {[['title','כותרת ראשית','מכללת תורת הנפש'],['subtitle','תת כותרת','יומן תלמיד-ה | מעקב הכשרה'],['welcomeTitle','כותרת ברוך הבא','שלום, {name}!'],['welcomeSub','תת הודעה','ברוכים הבאים ליומן ההכשרה']].map(([k,l,ph])=>(
@@ -1201,17 +1292,265 @@ function AdminPanel({users,setUsers,adminPw,setAdminPw,teacherPw,setTeacherPw,si
     </div>
   );
 }
+// ══════════ FONT HOVER PICKER ══════════
+const FONTS_LIST=['Assistant','Heebo','Rubik','Varela Round','Frank Ruhl Libre','Secular One','Bellefair','Amatic SC','Suez One','Noto Sans Hebrew','Noto Serif Hebrew','Tinos','Arimo','Cousine'];
+
+function FontHoverPicker({selEl}){
+  const [open,setOpen]=useState(false);
+  const [hovered,setHovered]=useState(null);
+  const origFont=useRef(null);
+  const listRef=useRef(null);
+
+  // Save original font when list opens
+  const openList=()=>{
+    if(selEl) origFont.current=selEl.style.fontFamily||'';
+    setOpen(true);
+  };
+
+  // Hover a font row — apply directly to element
+  const onRowEnter=f=>{
+    setHovered(f);
+    if(selEl) selEl.style.fontFamily=`'${f}',sans-serif`;
+  };
+
+  // Mouse left the whole list — revert
+  const onListLeave=()=>{
+    if(selEl&&origFont.current!=null) selEl.style.fontFamily=origFont.current;
+    setHovered(null);
+    setOpen(false);
+  };
+
+  // Clicked a font — commit
+  const applyFont=f=>{
+    origFont.current=`'${f}',sans-serif`;
+    if(selEl) selEl.style.fontFamily=`'${f}',sans-serif`;
+    setHovered(null);
+    setOpen(false);
+  };
+
+  return(
+    <div style={{position:'relative',display:'inline-block'}}>
+      <button onClick={openList}
+        style={{padding:'4px 10px',borderRadius:'6px',background:'rgba(255,255,255,.12)',
+          border:'1px solid rgba(255,255,255,.2)',color:'white',fontSize:'.75rem',
+          cursor:'pointer',fontWeight:600,whiteSpace:'nowrap'}}>
+        {hovered||'פונט ▾'}
+      </button>
+      {open&&(
+        <div ref={listRef}
+          onMouseLeave={onListLeave}
+          style={{position:'absolute',top:'calc(100% + 4px)',right:0,
+            background:'#1e1b4b',border:'1px solid rgba(255,255,255,.15)',
+            borderRadius:'10px',overflow:'hidden auto',zIndex:10000,
+            boxShadow:'0 8px 32px rgba(0,0,0,.6)',width:'190px',maxHeight:'300px'}}>
+          {FONTS_LIST.map(f=>(
+            <div key={f}
+              onMouseEnter={()=>onRowEnter(f)}
+              onClick={()=>applyFont(f)}
+              style={{padding:'9px 14px',cursor:'pointer',color:'white',
+                fontFamily:`'${f}',sans-serif`,fontSize:'1rem',lineHeight:'1.3',
+                background:hovered===f?'rgba(74,111,165,.6)':'transparent',
+                borderBottom:'1px solid rgba(255,255,255,.05)',
+                userSelect:'none'}}>
+              {f}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ══════════ VISUAL EDITOR CHOOSER ══════════
+function VisualEditorChooser({onClose,onChooseLogin,onChooseMain}){
+  return(
+    <div style={{position:'fixed',inset:0,zIndex:9999,background:'linear-gradient(135deg,#1a1a2e,#16213e,#0f3460,#533483)',display:'flex',alignItems:'center',justifyContent:'center',flexDirection:'column',gap:'24px'}}>
+      <h2 style={{color:'white',fontWeight:800,fontSize:'1.4rem',margin:0}}>עורך ויזואלי — בחר מסך</h2>
+      <div style={{display:'flex',gap:'20px',flexWrap:'wrap',justifyContent:'center'}}>
+        <button onClick={onChooseLogin}
+          style={{width:'200px',padding:'28px 20px',borderRadius:'18px',background:'rgba(255,255,255,.12)',border:'2px solid rgba(255,255,255,.25)',color:'white',cursor:'pointer',textAlign:'center',backdropFilter:'blur(10px)',transition:'all .2s'}}
+          onMouseEnter={e=>{e.currentTarget.style.background='rgba(255,255,255,.22)';e.currentTarget.style.transform='translateY(-3px)';}}
+          onMouseLeave={e=>{e.currentTarget.style.background='rgba(255,255,255,.12)';e.currentTarget.style.transform='translateY(0)';}}>
+          <div style={{fontSize:'2.5rem',marginBottom:'12px'}}>🌐</div>
+          <div style={{fontWeight:800,fontSize:'1rem',marginBottom:'6px'}}>מסך הרשמה</div>
+          <div style={{fontSize:'.78rem',opacity:.7}}>עריכת אנימציות, צבעים וטקסט במסך הכניסה</div>
+        </button>
+        <button onClick={onChooseMain}
+          style={{width:'200px',padding:'28px 20px',borderRadius:'18px',background:'rgba(255,255,255,.12)',border:'2px solid rgba(255,255,255,.25)',color:'white',cursor:'pointer',textAlign:'center',backdropFilter:'blur(10px)',transition:'all .2s'}}
+          onMouseEnter={e=>{e.currentTarget.style.background='rgba(255,255,255,.22)';e.currentTarget.style.transform='translateY(-3px)';}}
+          onMouseLeave={e=>{e.currentTarget.style.background='rgba(255,255,255,.12)';e.currentTarget.style.transform='translateY(0)';}}>
+          <div style={{fontSize:'2.5rem',marginBottom:'12px'}}>📋</div>
+          <div style={{fontWeight:800,fontSize:'1rem',marginBottom:'6px'}}>דף הבית</div>
+          <div style={{fontSize:'.78rem',opacity:.7}}>עריכת תוכן, צבעים ופונטים בדף הראשי</div>
+        </button>
+      </div>
+      <button onClick={onClose} style={{padding:'9px 24px',borderRadius:'10px',background:'rgba(255,255,255,.15)',color:'white',fontWeight:600,border:'1px solid rgba(255,255,255,.25)',cursor:'pointer'}}>ביטול</button>
+    </div>
+  );
+}
+
+// ══════════ LOGIN EDITOR ══════════
+const ANIM_PRESETS=[
+  {id:'float',   name:'ריחוף',    type:'circles', css:'floatA 13s {del} infinite ease-in-out'},
+  {id:'pulse',   name:'פעימה',    type:'circles', css:'pulse 4s {del} infinite ease-in-out'},
+  {id:'spin',    name:'סיבוב',    type:'circles', css:'slowSpin 20s {del} infinite linear'},
+  {id:'drift',   name:'סחף',     type:'circles', css:'drift 16s {del} infinite ease-in-out'},
+  {id:'bounce',  name:'קפיצה',    type:'circles', css:'bounce3d 8s {del} infinite ease-in-out'},
+  {id:'waves',   name:'גלים',     type:'waves',   css:'waveMove 6s {del} infinite ease-in-out'},
+  {id:'stripes', name:'פסים',     type:'stripes', css:'stripeSlide 4s {del} infinite linear'},
+  {id:'bubbles', name:'בועות',    type:'bubbles', css:'bubbleRise 7s {del} infinite ease-in'},
+];
+function LoginEditor({onClose,onSave,saving,saved,editC,setEditC}){
+  const [anim,setAnim]=useState('float');
+  const [bg1,setBg1]=useState('#1a1a2e');
+  const [bg2,setBg2]=useState('#533483');
+  const [titleText,setTitleText]=useState(editC.title||'מכללת תורת הנפש');
+  const [subText,setSubText]=useState(editC.subtitle||'יומן תלמיד-ה | מעקב הכשרה');
+
+  // Preview circles with selected animation
+  const circles=[
+    {w:580,t:'-180px',r:'-140px',bg:'rgba(102,126,234,0.22)',del:'0s'},
+    {w:440,b:'-140px',l:'-90px',bg:'rgba(118,75,162,0.22)',del:'2.6s'},
+    {w:290,t:'38%',l:'28%',bg:'rgba(168,85,247,0.14)',del:'5.2s'},
+    {w:190,t:'13%',l:'53%',bg:'rgba(6,182,212,0.14)',del:'7.8s'},
+    {w:340,b:'8%',r:'18%',bg:'rgba(99,102,241,0.16)',del:'10.4s'},
+  ];
+  const getAnim=(del)=>{
+    const p=ANIM_PRESETS.find(x=>x.id===anim)||ANIM_PRESETS[0];
+    return p.css.replace('{del}',del);
+  };
+
+  const save=()=>{
+    setEditC({...editC,title:titleText,subtitle:subText,loginAnim:anim,loginBg1:bg1,loginBg2:bg2});
+    onSave();
+  };
+
+  return(
+    <div style={{position:'fixed',inset:0,zIndex:9999,display:'flex',flexDirection:'column'}}>
+      {/* Top bar */}
+      <div style={{background:'#1e1b4b',color:'white',padding:'10px 18px',display:'flex',alignItems:'center',gap:'12px',flexShrink:0,borderBottom:'1px solid rgba(255,255,255,.1)',flexWrap:'wrap'}}>
+        <span style={{fontWeight:800,fontSize:'.9rem'}}>עורך מסך הרשמה</span>
+        <div style={{flex:1}}/>
+        {/* Animation picker */}
+        <div style={{display:'flex',gap:'5px',flexWrap:'wrap'}}>
+          {ANIM_PRESETS.map(p=>(
+            <button key={p.id} onClick={()=>setAnim(p.id)}
+              style={{padding:'4px 10px',borderRadius:'7px',fontSize:'.76rem',fontWeight:700,border:'none',cursor:'pointer',
+                background:anim===p.id?'white':'rgba(255,255,255,.15)',
+                color:anim===p.id?'#3d5a8a':'white'}}>
+              {p.name}
+            </button>
+          ))}
+        </div>
+        {/* BG colors */}
+        <div style={{display:'flex',alignItems:'center',gap:'6px'}}>
+          <span style={{fontSize:'.73rem',opacity:.6}}>רקע:</span>
+          <input type="color" value={bg1} onChange={e=>setBg1(e.target.value)} style={{width:'28px',height:'24px',borderRadius:'4px',border:'none',cursor:'pointer'}}/>
+          <input type="color" value={bg2} onChange={e=>setBg2(e.target.value)} style={{width:'28px',height:'24px',borderRadius:'4px',border:'none',cursor:'pointer'}}/>
+        </div>
+        <button onClick={save} disabled={saving}
+          style={{padding:'6px 14px',borderRadius:'7px',background:saved?'#10b981':'#4a6fa5',color:'white',fontWeight:700,border:'none',cursor:'pointer',fontSize:'.82rem'}}>
+          {saving?'שומר...':saved?'נשמר ✓':'שמור'}
+        </button>
+        <button onClick={onClose} style={{padding:'6px 11px',borderRadius:'7px',background:'rgba(239,68,68,.75)',color:'white',fontWeight:700,border:'none',cursor:'pointer'}}>סגור</button>
+      </div>
+
+      {/* Preview */}
+      <div style={{flex:1,position:'relative',overflow:'hidden',background:`linear-gradient(135deg,${bg1} 0%,${bg2} 100%)`}}>
+        {/* Add keyframes for all animations */}
+        <style>{`
+          @keyframes pulse{0%,100%{transform:scale(1);opacity:.8}50%{transform:scale(1.15);opacity:1}}
+          @keyframes slowSpin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
+          @keyframes drift{0%{transform:translate(0,0)}25%{transform:translate(20px,-25px)}50%{transform:translate(-15px,-40px)}75%{transform:translate(-25px,-15px)}100%{transform:translate(0,0)}}
+          @keyframes bounce3d{0%,100%{transform:translateY(0)scaleX(1)}50%{transform:translateY(-40px)scaleX(1.05)}}
+          @keyframes waveMove{0%{transform:translateX(0)translateY(0)scaleY(1)}25%{transform:translateX(-5%)translateY(-20px)scaleY(1.1)}50%{transform:translateX(-10%)translateY(0)scaleY(0.95)}75%{transform:translateX(-5%)translateY(20px)scaleY(1.05)}100%{transform:translateX(0)translateY(0)scaleY(1)}}
+          @keyframes stripeSlide{0%{transform:translateX(0)}100%{transform:translateX(80px)}}
+          @keyframes bubbleRise{0%{transform:translateY(110%);opacity:0}20%{opacity:.8}80%{opacity:.6}100%{transform:translateY(-110%);opacity:0}}
+        `}</style>
+        {(()=>{
+          const preset=ANIM_PRESETS.find(x=>x.id===anim)||ANIM_PRESETS[0];
+          if(preset.type==='waves'){
+            // Render 4 wave layers
+            return [0,1,2,3].map(i=>(
+              <div key={i} style={{position:'absolute',
+                bottom:`${i*12}%`,left:'-10%',right:'-10%',
+                height:`${28+i*8}%`,
+                background:`rgba(${i%2===0?'102,126,234':'168,85,247'},${0.12+i*0.04})`,
+                borderRadius:'50% 50% 0 0',
+                animation:`waveMove ${5+i*1.5}s ${i*1.2}s infinite ease-in-out`,
+                pointerEvents:'none'}}/>
+            ));
+          }
+          if(preset.type==='stripes'){
+            // Render diagonal stripes
+            return [0,1,2,3,4,5,6,7].map(i=>(
+              <div key={i} style={{position:'absolute',
+                top:'-20%',bottom:'-20%',
+                left:`${i*14-10}%`,width:'8%',
+                background:`rgba(${i%2===0?'102,126,234':'168,85,247'},0.12)`,
+                transform:'skewX(-20deg)',
+                animation:`stripeSlide ${3+i*0.3}s ${i*0.4}s infinite linear`,
+                pointerEvents:'none'}}/>
+            ));
+          }
+          if(preset.type==='bubbles'){
+            return [0,1,2,3,4,5,6,7,8].map(i=>(
+              <div key={i} style={{position:'absolute',
+                bottom:'-10%',
+                left:`${8+i*11}%`,
+                width:`${20+i%3*20}px`,height:`${20+i%3*20}px`,
+                background:`rgba(${i%3===0?'102,126,234':i%3===1?'168,85,247':'6,182,212'},0.25)`,
+                borderRadius:'50%',
+                animation:`bubbleRise ${4+i*0.8}s ${i*0.6}s infinite ease-in`,
+                pointerEvents:'none'}}/>
+            ));
+          }
+          // Default: circles
+          return circles.map((s,i)=>(
+            <div key={i} style={{position:'absolute',
+              width:`${s.w}px`,height:`${s.w}px`,
+              top:s.t,bottom:s.b,right:s.r,left:s.l,
+              background:s.bg,borderRadius:'50%',
+              animation:getAnim(s.del),
+              pointerEvents:'none'}}/>
+          ));
+        })()}
+        {/* Login card preview */}
+        <div style={{position:'absolute',inset:0,display:'flex',alignItems:'center',justifyContent:'center',zIndex:2}}>
+          <div style={{background:'rgba(255,255,255,.96)',borderRadius:'22px',padding:'40px',width:'340px',textAlign:'center',boxShadow:'0 20px 60px rgba(0,0,0,.4)'}}>
+            <img src={`data:image/png;base64,${LOGO}`} style={{maxWidth:'200px',marginBottom:'12px'}}/>
+            <div>
+              <input value={titleText} onChange={e=>setTitleText(e.target.value)}
+                style={{width:'100%',textAlign:'center',fontWeight:800,fontSize:'1.2rem',border:'1px dashed #ccc',borderRadius:'6px',padding:'4px',marginBottom:'6px',background:'transparent',color:'#1a1a2e'}}/>
+              <input value={subText} onChange={e=>setSubText(e.target.value)}
+                style={{width:'100%',textAlign:'center',fontSize:'.8rem',border:'1px dashed #ccc',borderRadius:'6px',padding:'4px',background:'transparent',color:'#6b7280'}}/>
+            </div>
+            <div style={{marginTop:'20px',padding:'12px',borderRadius:'10px',background:'linear-gradient(135deg,#4a6fa5,#7b4fa6)',color:'white',fontWeight:700,fontSize:'.9rem'}}>כניסה למערכת</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ══════════ VISUAL EDITOR ══════════
 function VisualEditor({onClose,editC,setEditC,editR,setR,getR,editTh,setEditTh,onSave,saving,saved,users,reqOv}){
-  const [browseMode,setBrowseMode]=useState(true); // true=navigate, false=edit
+  const [browseMode,setBrowseMode]=useState(true);
+  const [dragMode,setDragMode]=useState(false);
   const [previewView,setPreviewView]=useState('dashboard');
   const [selEl,setSelEl]=useState(null);
   const [selText,setSelText]=useState('');
   const [selColor,setSelColor]=useState('');
   const [status,setStatus]=useState('מצב ניווט — לחץ על כפתורי התפריט לניווט');
+  const [previewGender,setPreviewGender]=useState('female');
+  const [previewYear,setPreviewYear]=useState('2');
+  const [bodyFont,setBodyFont]=useState('Assistant');
+  const [headingFont,setHeadingFont]=useState('Heebo');
+  const draggingEl=useRef(null);
+  const dragOffset=useRef({x:0,y:0});
 
   const previewUser={
-    id:'preview',name:'תלמיד לדוגמה',year:'2',gender:'female',email:'preview@test.com',
+    id:'preview',name:'תלמיד לדוגמה',year:previewYear,gender:previewGender,email:'preview@test.com',
     practical:[{id:'1',num:'1',date:'2025-01-10',open:'פגישה ראשונה',topics:'היכרות',position:'חיובי',focus:'קשר',insights:'תובנות ראשוניות',challenge:'ביסוס אמון',lessons:'לקחים'}],
     supervision:[{id:'1',date:'2025-01-15',inst:'אורלי טוויטו',topics:'ניהול מקרה',feedback:'משוב טוב',contribution:'התפתחות',challenges:'אתגרים',selfLearn:'למידה',goals:'יעדים'}],
     cases:[],impact:[],proficiency:[],finalProject:null,yearHistory:[]
@@ -1221,9 +1560,71 @@ function VisualEditor({onClose,editC,setEditC,editR,setR,getR,editTh,setEditTh,o
   useEffect(()=>{
     document.body.className='theme-'+editTh;
   },[editTh]);
+  useEffect(()=>{
+    document.body.style.fontFamily=`'${bodyFont}',sans-serif`;
+    document.querySelectorAll('h1,h2,h3,h4,h5,h6').forEach(el=>el.style.fontFamily=`'${headingFont}',sans-serif`);
+  },[bodyFont,headingFont]);
 
   // Click handler — only active in edit mode
+  // ── DRAG TOOL HANDLERS ──
+  const handleDragMouseDown=e=>{
+    if(!dragMode) return;
+    const el=e.target;
+    if(['HTML','BODY'].includes(el.tagName)) return;
+    e.preventDefault(); e.stopPropagation();
+    // Prepare element for dragging
+    const rect=el.getBoundingClientRect();
+    const parentRect=el.parentElement?.getBoundingClientRect()||{left:0,top:0};
+    el.style.position='relative';
+    el.style.zIndex='9999';
+    el.style.outline='2px dashed #f59e0b';
+    el.style.outlineOffset='3px';
+    el.style.cursor='grabbing';
+    el.style.userSelect='none';
+    draggingEl.current=el;
+    dragOffset.current={
+      x: e.clientX - rect.left,
+      y: e.clientY - rect.top
+    };
+    setStatus('גורר — שחרר כדי למקם');
+  };
+
+  const handleDragMouseMove=useCallback(e=>{
+    if(!dragMode||!draggingEl.current) return;
+    const el=draggingEl.current;
+    const parent=el.parentElement;
+    if(!parent) return;
+    const parentRect=parent.getBoundingClientRect();
+    const x=e.clientX-parentRect.left-dragOffset.current.x;
+    const y=e.clientY-parentRect.top-dragOffset.current.y;
+    el.style.position='absolute';
+    el.style.left=x+'px';
+    el.style.top=y+'px';
+    el.style.margin='0';
+  },[dragMode]);
+
+  const handleDragMouseUp=useCallback(()=>{
+    if(!draggingEl.current) return;
+    const el=draggingEl.current;
+    el.style.cursor='grab';
+    el.style.outline='2px solid #f59e0b';
+    draggingEl.current=null;
+    setStatus('אלמנט הוזז — בחר כלי הזזה שוב להזזה נוספת');
+  },[]);
+
+  useEffect(()=>{
+    if(dragMode){
+      window.addEventListener('mousemove',handleDragMouseMove);
+      window.addEventListener('mouseup',handleDragMouseUp);
+      return()=>{
+        window.removeEventListener('mousemove',handleDragMouseMove);
+        window.removeEventListener('mouseup',handleDragMouseUp);
+      };
+    }
+  },[dragMode,handleDragMouseMove,handleDragMouseUp]);
+
   const handleClick=e=>{
+    if(dragMode) return; // drag mode handles its own events
     if(browseMode){
       // In browse mode: allow nav button clicks
       const btn=e.target.closest('button[data-view]');
@@ -1304,8 +1705,65 @@ function VisualEditor({onClose,editC,setEditC,editR,setR,getR,editTh,setEditTh,o
           color:'white',
           boxShadow: !browseMode ? '0 0 12px rgba(74,111,165,.5)' : 'none'
         }}>
-          {browseMode ? '🔍 מצב ניווט — לחץ לעריכה' : '✏️ מצב עריכה — לחץ לניווט'}
+          {browseMode ? '🔍 ניווט' : '✏️ עריכה'}
         </button>
+
+        {/* DRAG TOOL button */}
+        <button onClick={()=>{
+          setDragMode(!dragMode);
+          if(!dragMode){setBrowseMode(false);setStatus('כלי הזזה פעיל — לחץ וגרור כל אלמנט');}
+          else setStatus('כלי הזזה כבוי');
+        }} style={{
+          padding:'6px 14px',borderRadius:'20px',fontWeight:700,fontSize:'.84rem',
+          cursor:'pointer',border:'2px solid',transition:'all .2s',whiteSpace:'nowrap',
+          background: dragMode ? '#f59e0b' : 'rgba(255,255,255,.12)',
+          borderColor: dragMode ? '#f59e0b' : 'rgba(255,255,255,.25)',
+          color: dragMode ? '#1e1b4b' : 'white',
+          boxShadow: dragMode ? '0 0 12px rgba(245,158,11,.5)' : 'none'
+        }}>
+          ✥ הזזה{dragMode?' — פעיל':''}
+        </button>
+
+        {/* Gender toggle */}
+        <div style={{display:'flex',borderRadius:'20px',overflow:'hidden',border:'1px solid rgba(255,255,255,.25)',flexShrink:0}}>
+          {[['female','נקבה'],['male','זכר']].map(([g,l])=>(
+            <button key={g} onClick={()=>setPreviewGender(g)}
+              style={{padding:'5px 12px',border:'none',cursor:'pointer',fontSize:'.76rem',fontWeight:700,
+                background:previewGender===g?'white':'transparent',
+                color:previewGender===g?'#3d5a8a':'rgba(255,255,255,.75)'}}>
+              {l}
+            </button>
+          ))}
+        </div>
+
+        {/* Year toggle */}
+        <div style={{display:'flex',borderRadius:'20px',overflow:'hidden',border:'1px solid rgba(255,255,255,.25)',flexShrink:0}}>
+          {[['2',"שנה ב'"],['3',"שנה ג'"],['4',"שנה ד'"]].map(([y,l])=>(
+            <button key={y} onClick={()=>setPreviewYear(y)}
+              style={{padding:'5px 10px',border:'none',cursor:'pointer',fontSize:'.73rem',fontWeight:700,
+                background:previewYear===y?'white':'transparent',
+                color:previewYear===y?'#3d5a8a':'rgba(255,255,255,.75)'}}>
+              {l}
+            </button>
+          ))}
+        </div>
+
+        {/* Font pickers */}
+        <select value={bodyFont} onChange={e=>{setBodyFont(e.target.value);setEditC({...editC,bodyFont:e.target.value});}}
+          style={{padding:'4px 8px',borderRadius:'7px',background:'rgba(255,255,255,.12)',border:'1px solid rgba(255,255,255,.2)',color:'white',fontSize:'.75rem',cursor:'pointer',maxWidth:'130px'}}>
+          <option value="" disabled style={{background:'#1e1b4b'}}>גוף טקסט</option>
+          {['Assistant','Heebo','Rubik','Varela Round','Frank Ruhl Libre','Secular One','Bellefair','Amatic SC','Suez One','Noto Sans Hebrew','Noto Serif Hebrew','Tinos','Arimo','Cousine'].map(f=>(
+            <option key={f} value={f} style={{background:'#1e1b4b',fontFamily:f}}>{f}</option>
+          ))}
+        </select>
+
+        <select value={headingFont} onChange={e=>{setHeadingFont(e.target.value);setEditC({...editC,headingFont:e.target.value});}}
+          style={{padding:'4px 8px',borderRadius:'7px',background:'rgba(255,255,255,.12)',border:'1px solid rgba(255,255,255,.2)',color:'white',fontSize:'.75rem',cursor:'pointer',maxWidth:'130px'}}>
+          <option value="" disabled style={{background:'#1e1b4b'}}>כותרות</option>
+          {['Heebo','Assistant','Rubik','Varela Round','Frank Ruhl Libre','Secular One','Bellefair','Amatic SC','Suez One','Noto Sans Hebrew','Noto Serif Hebrew','Tinos','Arimo','Cousine'].map(f=>(
+            <option key={f} value={f} style={{background:'#1e1b4b',fontFamily:f}}>{f}</option>
+          ))}
+        </select>
 
         <span style={{fontSize:'.73rem',color:'rgba(255,255,255,.45)',flex:1,minWidth:0,overflow:'hidden',whiteSpace:'nowrap',textOverflow:'ellipsis'}}>
           {status}
@@ -1332,6 +1790,16 @@ function VisualEditor({onClose,editC,setEditC,editR,setR,getR,editTh,setEditTh,o
             <label style={{fontSize:'.7rem',color:'rgba(255,255,255,.45)'}}>צבע:</label>
             <input type="color" value={selColor||'#333333'} onChange={e=>applyColor(e.target.value)}
               style={{width:'28px',height:'24px',borderRadius:'4px',border:'none',cursor:'pointer',padding:'1px'}}/>
+            <label style={{fontSize:'.7rem',color:'rgba(255,255,255,.45)'}}>גודל:</label>
+            <div style={{display:'flex',alignItems:'center',gap:'3px'}}>
+              <button onClick={()=>{if(selEl){const s=parseFloat(window.getComputedStyle(selEl).fontSize)||16;selEl.style.fontSize=(s-1)+'px';}}} style={{width:'22px',height:'22px',borderRadius:'4px',background:'rgba(255,255,255,.15)',color:'white',border:'none',cursor:'pointer',fontWeight:700,fontSize:'.9rem',lineHeight:1}}>−</button>
+              <span style={{fontSize:'.75rem',color:'white',minWidth:'28px',textAlign:'center'}}>
+                {selEl?Math.round(parseFloat(window.getComputedStyle(selEl).fontSize)||16)+'px':'—'}
+              </span>
+              <button onClick={()=>{if(selEl){const s=parseFloat(window.getComputedStyle(selEl).fontSize)||16;selEl.style.fontSize=(s+1)+'px';}}} style={{width:'22px',height:'22px',borderRadius:'4px',background:'rgba(255,255,255,.15)',color:'white',border:'none',cursor:'pointer',fontWeight:700,fontSize:'.9rem',lineHeight:1}}>+</button>
+            </div>
+            <label style={{fontSize:'.7rem',color:'rgba(255,255,255,.45)'}}>פונט:</label>
+            <FontHoverPicker selEl={selEl}/>
           </div>
         )}
 
@@ -1347,8 +1815,10 @@ function VisualEditor({onClose,editC,setEditC,editR,setR,getR,editTh,setEditTh,o
       </div>
 
       {/* ── PREVIEW AREA ── */}
-      <div style={{flex:1,overflowY:'auto',overflowX:'hidden',background:'var(--bg)',cursor:browseMode?'default':'crosshair'}}
-        onClick={handleClick}>
+      <div style={{flex:1,overflowY:'auto',overflowX:'hidden',background:'var(--bg)',
+          cursor:dragMode?'grab':browseMode?'default':'crosshair'}}
+        onClick={handleClick}
+        onMouseDown={dragMode?handleDragMouseDown:undefined}>
 
         {/* Edit mode overlay hint */}
         {!browseMode && (
