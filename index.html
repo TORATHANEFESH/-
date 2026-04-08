@@ -210,6 +210,13 @@ function WaBtn({href,label,sm}){
     {label}
   </a>;
 }
+
+function rgbToHex(rgb){
+  if(!rgb||rgb.startsWith('#')) return rgb||'#333333';
+  const m=rgb.match(/\d+/g);
+  if(!m||m.length<3) return '#333333';
+  return '#'+m.slice(0,3).map(x=>parseInt(x).toString(16).padStart(2,'0')).join('');
+}
 // ══════════ APP ROOT ══════════
 function App(){
   const [users,setUsers]=useState([]);
@@ -313,138 +320,150 @@ function App(){
 
 // ══════════ TEACHER PANEL (read-only) ══════════
 function TeacherPanel({users,setIsTeacher,setView}){
+  const [gender,setGender]=useState(null);
+  const [year,setYear]=useState(null);
   const [sel,setSel]=useState(null);
   const [uploads,setUploads]=useState([]);
-  const [localUsers,setLocalUsers]=useState(users);
+  const [local,setLocal]=useState(users);
 
   useEffect(()=>{
-    // Always reload from Firestore for fresh data
     db.collection('users').get().then(s=>{
       const a=[];s.forEach(d=>a.push({id:d.id,...d.data()}));
-      if(a.length>0) setLocalUsers(a);
-      else if(users.length>0) setLocalUsers(users);
-    }).catch(()=>{if(users.length>0) setLocalUsers(users);});
+      setLocal(a.length>0?a:users);
+    }).catch(()=>setLocal(users));
+    db.collection('uploads').get().then(s=>{
+      const a=[];s.forEach(d=>a.push({id:d.id,...d.data()}));setUploads(a);
+    }).catch(()=>{});
   },[]);
 
-  useEffect(()=>{
-    // Load file uploads from Firestore
-    db.collection('uploads').orderBy('uploadedAt','desc').limit(100)
-      .get().then(s=>{
-        const arr=[];s.forEach(d=>arr.push({id:d.id,...d.data()}));
-        setUploads(arr);
-      }).catch(()=>{});
-  },[]);
-
-  const u=sel?users.find(x=>x.id===sel):null;
-  // Get new (unseen) uploads count
-  const unseenCount=uploads.filter(up=>!up.seen).length;
-  const studentUploads=u?uploads.filter(up=>up.studentId===u.id):[];
+  const u=sel?local.find(x=>x.id===sel):null;
+  const stuUploads=u?uploads.filter(up=>up.studentId===u.id):[];
+  const hasNew=uid=>uploads.some(up=>up.studentId===uid&&!up.seen);
+  const newCount=uploads.filter(up=>!up.seen).length;
+  const years=gender==='male'?['2','3']:['2','3','4'];
+  const YLoc={'2':"שנה ב'",'3':"שנה ג'",'4':"שנה ד' פלא יועץ"};
+  const filtered=local.filter(x=>(!gender||x.gender===gender)&&(!year||x.year===year));
 
   return(
     <div style={{minHeight:'100vh',background:'#f7f5fb'}}>
-      <header style={{background:'linear-gradient(135deg,#3d5a8a,#7b4fa6)',padding:'14px 32px',color:'white',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
-        <div>
-          <h1 style={{margin:'0 0 2px',fontSize:'1.1rem',fontWeight:800}}>תצוגת מחנך ({localUsers.length} תלמידים)</h1>
-          <p style={{margin:0,fontSize:'.77rem',opacity:.8}}>מכללת תורת הנפש</p>
-        </div>
-        <button onClick={()=>{setIsTeacher(false);setView('login');}} style={{padding:'8px 18px',borderRadius:'9px',background:'rgba(255,255,255,.2)',color:'white',fontWeight:700,border:'1px solid rgba(255,255,255,.3)',cursor:'pointer'}}>יציאה</button>
-      </header>
-      <div style={{maxWidth:'1100px',width:'100%',margin:'0 auto',padding:'24px',boxSizing:'border-box'}}>
-        <div style={{display:'grid',gridTemplateColumns:'260px 1fr',gap:'20px'}}>
-          {/* Student list */}
-          <div style={{background:'white',borderRadius:'14px',padding:'16px',boxShadow:'0 2px 12px rgba(0,0,0,.06)',height:'fit-content'}}>
-            <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'14px'}}>
-              <h3 style={{margin:0,fontSize:'.9rem',fontWeight:700,color:'#374151'}}>תלמידים ({localUsers.length})</h3>
-              {unseenCount>0&&<span style={{padding:'2px 8px',borderRadius:'20px',background:'#ef4444',color:'white',fontSize:'.73rem',fontWeight:700}}>●{unseenCount} חדש</span>}
-            </div>
-            {localUsers.map(u=>{
-              const hasNew=uploads.filter(up=>up.studentId===u.id&&!up.seen).length>0;
-              return(
-                <div key={u.id} onClick={()=>setSel(u.id)}
-                  style={{padding:'10px 12px',borderRadius:'9px',cursor:'pointer',marginBottom:'5px',
-                    background:sel===u.id?'rgba(74,111,165,.1)':'transparent',
-                    border:sel===u.id?'1px solid rgba(74,111,165,.3)':'1px solid transparent',
-                    transition:'all .15s',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
-                  <div>
-                    <p style={{margin:'0 0 2px',fontWeight:600,fontSize:'.88rem',color:'#1e2a3a'}}>{u.name}</p>
-                    <p style={{margin:0,fontSize:'.73rem',color:'#6b7280'}}>{YL[u.year]||u.year}</p>
-                  </div>
-                  {hasNew&&<span style={{width:'8px',height:'8px',borderRadius:'50%',background:'#ef4444',display:'block',flexShrink:0}}/>}
-                </div>
-              );
-            })}
+      <header style={{background:'linear-gradient(135deg,#3d5a8a,#7b4fa6)',padding:'12px 28px',color:'white',display:'flex',justifyContent:'space-between',alignItems:'center',flexWrap:'wrap',gap:'10px'}}>
+        <div style={{display:'flex',alignItems:'center',gap:'10px'}}>
+          {(gender||year)&&(
+            <button onClick={()=>{if(year){setYear(null);setSel(null);}else{setGender(null);setYear(null);setSel(null);}}}
+              style={{background:'rgba(255,255,255,.2)',border:'none',color:'white',padding:'5px 12px',borderRadius:'8px',cursor:'pointer',fontWeight:600,fontSize:'.82rem'}}>
+              ← חזור
+            </button>
+          )}
+          <div>
+            <h1 style={{margin:0,fontSize:'1rem',fontWeight:800}}>
+              תצוגת מחנך{gender?' — '+(gender==='male'?'גברים':'נשים'):''}
+              {year?' — '+YLoc[year]:''}
+            </h1>
+            {newCount>0&&<span style={{fontSize:'.75rem',background:'#ef4444',padding:'1px 7px',borderRadius:'10px',marginTop:'2px',display:'inline-block'}}>●{newCount} קבצים חדשים</span>}
           </div>
-          {/* Student detail */}
-          {u?(
-            <div style={{background:'white',borderRadius:'14px',padding:'22px',boxShadow:'0 2px 12px rgba(0,0,0,.06)'}}>
-              <h2 style={{margin:'0 0 3px',fontSize:'1.1rem',fontWeight:800,color:'#1e2a3a'}}>{u.name}</h2>
-              <p style={{margin:'0 0 16px',fontSize:'.83rem',color:'#6b7280'}}>{YL[u.year]||u.year} · {u.email}</p>
-              {/* Stats */}
-              <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(160px,1fr))',gap:'10px',marginBottom:'20px'}}>
-                {[['שעות התנסות',(u.practical||[]).length,'#4a6fa5'],['הדרכות אישיות',(u.supervision||[]).length,'#10b981'],['הצגות מקרה',(u.cases||[]).length,'#8b5cf6'],['שעות משפיעות',(u.impact||[]).length,'#06b6d4'],['מבחני בקיאות',(u.proficiency||[]).length,'#f59e0b']].map(([l,n,col])=>(
-                  <div key={l} style={{padding:'12px',borderRadius:'10px',background:col+'10',borderRight:`4px solid ${col}`}}>
-                    <p style={{margin:'0 0 3px',fontSize:'.73rem',color:'#6b7280',fontWeight:600}}>{l}</p>
-                    <p style={{margin:0,fontSize:'1.6rem',fontWeight:800,color:col,lineHeight:1}}>{n}</p>
-                  </div>
-                ))}
-              </div>
+        </div>
+        <button onClick={()=>{setIsTeacher(false);setView('login');}} style={{padding:'7px 16px',borderRadius:'9px',background:'rgba(255,255,255,.2)',color:'white',fontWeight:700,border:'1px solid rgba(255,255,255,.3)',cursor:'pointer',fontSize:'.84rem'}}>יציאה</button>
+      </header>
 
-              {/* Files from Firestore uploads collection */}
-              {studentUploads.length>0&&(
-                <div style={{marginBottom:'16px'}}>
-                  <h4 style={{margin:'0 0 10px',fontSize:'.88rem',fontWeight:700,color:'#374151',display:'flex',alignItems:'center',gap:'8px'}}>
-                    קבצים שהועלו
-                    {studentUploads.filter(up=>!up.seen).length>0&&(
-                      <span style={{padding:'1px 7px',borderRadius:'20px',background:'#ef4444',color:'white',fontSize:'.7rem',fontWeight:700}}>
-                        {studentUploads.filter(up=>!up.seen).length} חדש
-                      </span>
-                    )}
-                  </h4>
-                  {studentUploads.map((up,i)=>(
-                    <div key={up.id||i} style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'9px 12px',borderRadius:'9px',background:up.seen?'#f9fafb':'rgba(74,111,165,.06)',border:`1px solid ${up.seen?'#e5e7eb':'rgba(74,111,165,.2)'}`,marginBottom:'6px'}}>
-                      <div>
-                        <span style={{fontSize:'.8rem',fontWeight:600,color:'#374151'}}>{up.fileName||up.name}</span>
-                        <span style={{margin:'0 8px',padding:'1px 7px',borderRadius:'12px',background:'rgba(74,111,165,.1)',color:'#4a6fa5',fontSize:'.71rem',fontWeight:600}}>{up.category}</span>
-                        <span style={{fontSize:'.72rem',color:'#9ca3af'}}>{up.uploadedAt?new Date(up.uploadedAt).toLocaleDateString('he-IL'):''}</span>
-                        {!up.seen&&<span style={{margin:'0 6px',fontSize:'.7rem',fontWeight:700,color:'#ef4444'}}>חדש</span>}
-                      </div>
-                      <div style={{display:'flex',gap:'7px',alignItems:'center'}}>
-                        <a href={up.url} target="_blank" style={{padding:'4px 12px',borderRadius:'7px',background:'#4a6fa5',color:'white',fontSize:'.79rem',fontWeight:600,textDecoration:'none',whiteSpace:'nowrap'}}
-                          onClick={()=>{if(!up.seen){db.collection('uploads').doc(up.id).update({seen:true}).catch(()=>{});setUploads(prev=>prev.map(x=>x.id===up.id?{...x,seen:true}:x));}}}>
-                          פתח
-                        </a>
-                      </div>
+      <div style={{maxWidth:'1100px',width:'100%',margin:'0 auto',padding:'20px 24px',boxSizing:'border-box'}}>
+
+        {!gender&&(
+          <div style={{display:'flex',gap:'20px',justifyContent:'center',marginTop:'40px',flexWrap:'wrap'}}>
+            {[['female','נשים','#8b5cf6'],['male','גברים','#3d5a8a']].map(([g,l,col])=>(
+              <button key={g} onClick={()=>{setGender(g);setYear(null);setSel(null);}}
+                style={{width:'190px',padding:'32px 16px',borderRadius:'16px',background:'white',border:`2px solid ${col}30`,cursor:'pointer',textAlign:'center',boxShadow:'0 4px 14px rgba(0,0,0,.08)',transition:'all .2s'}}
+                onMouseEnter={e=>{e.currentTarget.style.transform='translateY(-3px)';e.currentTarget.style.boxShadow='0 8px 24px rgba(0,0,0,.12)';}}
+                onMouseLeave={e=>{e.currentTarget.style.transform='none';e.currentTarget.style.boxShadow='0 4px 14px rgba(0,0,0,.08)';}}>
+                <div style={{fontWeight:800,fontSize:'1.3rem',color:col,marginBottom:'8px'}}>{l}</div>
+                <div style={{fontSize:'.78rem',color:'#9ca3af'}}>{local.filter(x=>x.gender===g).length} תלמידים</div>
+              </button>
+            ))}
+          </div>
+        )}
+
+        {gender&&!year&&(
+          <div style={{display:'flex',gap:'14px',justifyContent:'center',marginTop:'32px',flexWrap:'wrap'}}>
+            {years.map(y=>(
+              <button key={y} onClick={()=>{setYear(y);setSel(null);}}
+                style={{width:'170px',padding:'22px 14px',borderRadius:'14px',background:'white',border:'2px solid rgba(74,111,165,.15)',cursor:'pointer',textAlign:'center',boxShadow:'0 3px 10px rgba(0,0,0,.07)'}}>
+                <div style={{fontWeight:700,fontSize:'1rem',color:'#3d5a8a',marginBottom:'5px'}}>{YLoc[y]}</div>
+                <div style={{fontSize:'.78rem',color:'#9ca3af'}}>{local.filter(x=>x.gender===gender&&x.year===y).length} תלמידים</div>
+                {local.filter(x=>x.gender===gender&&x.year===y).some(x=>hasNew(x.id))&&(
+                  <div style={{marginTop:'7px',display:'inline-block',padding:'1px 7px',borderRadius:'10px',background:'#fef2f2',color:'#ef4444',fontSize:'.71rem',fontWeight:700}}>● חדש</div>
+                )}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {gender&&year&&(
+          <div style={{display:'grid',gridTemplateColumns:'220px 1fr',gap:'16px'}}>
+            <div style={{background:'white',borderRadius:'13px',padding:'13px',boxShadow:'0 2px 10px rgba(0,0,0,.06)',height:'fit-content'}}>
+              <h3 style={{margin:'0 0 10px',fontSize:'.85rem',fontWeight:700,color:'#374151'}}>{YLoc[year]} ({filtered.length})</h3>
+              {filtered.length===0&&<p style={{color:'#9ca3af',fontSize:'.8rem',textAlign:'center',padding:'12px 0'}}>אין תלמידים</p>}
+              {filtered.map(st=>(
+                <div key={st.id} onClick={()=>setSel(st.id)}
+                  style={{padding:'8px 10px',borderRadius:'8px',cursor:'pointer',marginBottom:'4px',
+                    background:sel===st.id?'rgba(74,111,165,.1)':'transparent',
+                    border:sel===st.id?'1px solid rgba(74,111,165,.3)':'1px solid transparent',
+                    display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+                  <div>
+                    <p style={{margin:'0 0 1px',fontWeight:600,fontSize:'.84rem',color:'#1e2a3a'}}>{st.name}</p>
+                    <p style={{margin:0,fontSize:'.71rem',color:'#6b7280'}}>{st.email}</p>
+                  </div>
+                  {hasNew(st.id)&&<span style={{width:'8px',height:'8px',borderRadius:'50%',background:'#f97316',display:'block',flexShrink:0}}/>}
+                </div>
+              ))}
+            </div>
+
+            {u?(
+              <div style={{background:'white',borderRadius:'13px',padding:'18px',boxShadow:'0 2px 10px rgba(0,0,0,.06)'}}>
+                <h2 style={{margin:'0 0 2px',fontSize:'1.05rem',fontWeight:800,color:'#1e2a3a'}}>{u.name}</h2>
+                <p style={{margin:'0 0 14px',fontSize:'.8rem',color:'#6b7280'}}>{u.email}</p>
+                <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(130px,1fr))',gap:'8px',marginBottom:'16px'}}>
+                  {[['התנסות',(u.practical||[]).length,'#4a6fa5'],['הדרכות',(u.supervision||[]).length,'#10b981'],['הצגות מקרה',(u.cases||[]).length,'#8b5cf6'],['משפיעות',(u.impact||[]).length,'#06b6d4'],['בקיאות',(u.proficiency||[]).length,'#f59e0b']].map(([l,n,col])=>(
+                    <div key={l} style={{padding:'10px',borderRadius:'9px',background:col+'10',borderRight:`3px solid ${col}`}}>
+                      <p style={{margin:'0 0 2px',fontSize:'.7rem',color:'#6b7280',fontWeight:600}}>{l}</p>
+                      <p style={{margin:0,fontSize:'1.4rem',fontWeight:800,color:col,lineHeight:1}}>{n}</p>
                     </div>
                   ))}
                 </div>
-              )}
-
-              {/* Files from user document */}
-              {[[(u.cases||[]),'הצגות מקרה'],[u.finalProject?[u.finalProject]:[],'עבודה מסכמת'],[(u.practical||[]).filter(p=>p.att).map(p=>p.att),'קבצי דיווח']].map(([files,label])=>
-                files.length>0&&(
-                  <div key={label} style={{marginBottom:'12px'}}>
-                    <h4 style={{margin:'0 0 7px',fontSize:'.82rem',fontWeight:700,color:'#374151'}}>{label}</h4>
-                    {files.map((f,i)=>(
-                      <a key={i} href={f.url} target="_blank"
-                        style={{display:'inline-flex',alignItems:'center',gap:'5px',padding:'5px 12px',borderRadius:'7px',background:'rgba(74,111,165,.1)',color:'#4a6fa5',fontSize:'.8rem',fontWeight:600,textDecoration:'none',marginLeft:'7px',marginBottom:'5px'}}>
-                        📄 {f.name}
-                      </a>
+                <h4 style={{margin:'0 0 8px',fontSize:'.86rem',fontWeight:700,color:'#374151'}}>
+                  קבצים שהועלו {stuUploads.filter(up=>!up.seen).length>0&&<span style={{padding:'1px 7px',borderRadius:'10px',background:'#f97316',color:'white',fontSize:'.69rem',fontWeight:700}}>{stuUploads.filter(up=>!up.seen).length} חדש</span>}
+                </h4>
+                {stuUploads.length===0&&<p style={{color:'#9ca3af',fontSize:'.8rem',marginBottom:'10px'}}>אין קבצים</p>}
+                {stuUploads.map((up,i)=>(
+                  <div key={up.id||i} style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'8px 11px',borderRadius:'8px',marginBottom:'4px',background:up.seen?'#f9fafb':'rgba(249,115,22,.05)',border:`1px solid ${up.seen?'#e5e7eb':'rgba(249,115,22,.2)'}`}}>
+                    <div>
+                      <span style={{fontWeight:600,fontSize:'.83rem',color:'#374151'}}>{up.fileName||up.name}</span>
+                      {!up.seen&&<span style={{margin:'0 6px',fontSize:'.69rem',color:'#f97316',fontWeight:700}}>● חדש</span>}
+                      {up.uploadedAt&&<span style={{display:'block',fontSize:'.69rem',color:'#9ca3af'}}>{new Date(up.uploadedAt).toLocaleDateString('he-IL')}</span>}
+                    </div>
+                    <a href={up.url} target="_blank"
+                      onClick={()=>{if(!up.seen){db.collection('uploads').doc(up.id).update({seen:true}).catch(()=>{});setUploads(prev=>prev.map(x=>x.id===up.id?{...x,seen:true}:x));}}}
+                      style={{padding:'4px 11px',borderRadius:'7px',background:'#4a6fa5',color:'white',fontSize:'.78rem',fontWeight:600,textDecoration:'none',whiteSpace:'nowrap'}}>פתח</a>
+                  </div>
+                ))}
+                {[[(u.cases||[]),'הצגות מקרה'],[u.finalProject?[u.finalProject]:[],'עבודה מסכמת'],[(u.practical||[]).filter(p=>p.att).map(p=>p.att),'קבצי דיווח']].filter(([f])=>f.length>0).map(([f,l])=>(
+                  <div key={l} style={{marginTop:'10px'}}>
+                    <h5 style={{margin:'0 0 5px',fontSize:'.8rem',fontWeight:700,color:'#374151'}}>{l}</h5>
+                    {f.map((fi,i)=>(
+                      <a key={i} href={fi.url} target="_blank" style={{display:'inline-flex',alignItems:'center',gap:'4px',padding:'4px 10px',borderRadius:'6px',background:'rgba(74,111,165,.1)',color:'#4a6fa5',fontSize:'.78rem',fontWeight:600,textDecoration:'none',marginLeft:'5px',marginBottom:'4px'}}>📄 {fi.name}</a>
                     ))}
                   </div>
-                )
-              )}
-            </div>
-          ):(
-            <div style={{background:'white',borderRadius:'14px',padding:'48px',textAlign:'center',boxShadow:'0 2px 12px rgba(0,0,0,.06)'}}>
-              <p style={{color:'#9ca3af',fontSize:'.95rem'}}>בחר תלמיד מהרשימה לצפייה בפרטים</p>
-            </div>
-          )}
-        </div>
+                ))}
+              </div>
+            ):(
+              <div style={{background:'white',borderRadius:'13px',padding:'36px',textAlign:'center',boxShadow:'0 2px 10px rgba(0,0,0,.06)'}}>
+                <p style={{color:'#9ca3af'}}>בחר תלמיד מהרשימה</p>
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
 }
-
 
 // ══════════ LOGIN ══════════
 function LoginPage({users,setUsers,setCur,onLogo}){
@@ -985,6 +1004,8 @@ function Footer({siteC}){
 // ══════════ ADMIN PANEL ══════════
 function AdminPanel({users,setUsers,adminPw,setAdminPw,teacherPw,setTeacherPw,siteC,reqOv,saveSite,setIsAdmin,setView,theme,saveTheme}){
   const [tab,setTab]=useState('students');
+  const [gf,setGf]=useState('');
+  const [yf,setYf]=useState('');
   // Reload users from Firestore if not loaded yet
   useEffect(()=>{
     db.collection('users').get().then(s=>{
@@ -1010,10 +1031,11 @@ function AdminPanel({users,setUsers,adminPw,setAdminPw,teacherPw,setTeacherPw,si
   const getR=(g,y,f)=>((editR[g]||{})[y]||{})[f]??((DEF_REQ[g]||{})[parseInt(y)]||{})[f]??'';
   const setR=(g,y,f,v)=>{const u=JSON.parse(JSON.stringify(editR));if(!u[g])u[g]={};if(!u[g][y])u[g][y]={};u[g][y][f]=parseInt(v)||0;chR(u);};
 
-  const saveAll=async()=>{
+  const saveAll=async(explicitC)=>{
     setSaving(true);
     try{
-      await saveSite(editC,editR);
+      const contentToSave=explicitC||editC;
+      await saveSite(contentToSave,editR);
       saveTheme(editTh);
       const genData={theme:editTh};
       if(editAdminPw!==adminPw){genData.adminPassword=editAdminPw;setAdminPw(editAdminPw);}
@@ -1093,12 +1115,22 @@ function AdminPanel({users,setUsers,adminPw,setAdminPw,teacherPw,setTeacherPw,si
         {/* STUDENTS */}
         {tab==='students'&&(
           <div style={{background:'white',borderRadius:'14px',overflow:'hidden'}}>
-            <div style={{padding:'16px 20px',borderBottom:'1px solid #e5e7eb'}}><h2 style={{margin:0,fontSize:'.97rem',fontWeight:700}}>תלמידים ({users.length})</h2></div>
+            <div style={{padding:'14px 18px',borderBottom:'1px solid #e5e7eb',display:'flex',justifyContent:'space-between',alignItems:'center',flexWrap:'wrap',gap:'8px'}}>
+              <h2 style={{margin:0,fontSize:'.93rem',fontWeight:700}}>תלמידים ({users.filter(u=>(!gf||u.gender===gf)&&(!yf||u.year===yf)).length})</h2>
+              <div style={{display:'flex',gap:'5px',flexWrap:'wrap'}}>
+                {[['','הכל'],['female','נשים'],['male','גברים']].map(([g,l])=>(
+                  <button key={g} onClick={()=>setGf(g)} style={{padding:'3px 10px',borderRadius:'12px',fontSize:'.76rem',fontWeight:700,border:'1px solid #e5e7eb',cursor:'pointer',background:gf===g?'#4a6fa5':'white',color:gf===g?'white':'#6b7280'}}>{l}</button>
+                ))}
+                {(gf==='male'?[['','כל השנים'],['2',"ב'"],['3',"ג'"]]: [['','כל השנים'],['2',"ב'"],['3',"ג'"],['4',"ד'"]]).map(([y,l])=>(
+                  <button key={y} onClick={()=>setYf(y)} style={{padding:'3px 10px',borderRadius:'12px',fontSize:'.76rem',fontWeight:700,border:'1px solid #e5e7eb',cursor:'pointer',background:yf===y?'#4a6fa5':'white',color:yf===y?'white':'#6b7280'}}>{l}</button>
+                ))}
+              </div>
+            </div>
             {!users.length?<p style={{textAlign:'center',color:'#9ca3af',padding:'36px'}}>טוען תלמידים מ-Firebase... (אם לא מופיע תוכן, רענן את הדף)</p>:(
               <div style={{overflowX:'auto'}}>
                 <table style={{width:'100%',borderCollapse:'collapse',fontSize:'.85rem'}}>
                   <thead><tr style={{background:'#f9fafb'}}>{['שם','שנה','מגדר','אימייל','התנסות','הדרכות','הצגות מקרה','שינוי שנה','מחיקה'].map(h=><th key={h} style={{padding:'10px 13px',textAlign:'right',fontWeight:700,color:'#374151',whiteSpace:'nowrap'}}>{h}</th>)}</tr></thead>
-                  <tbody>{users.map((u,i)=>(
+                  <tbody>{users.filter(u=>(!gf||u.gender===gf)&&(!yf||u.year===yf)).map((u,i)=>(
                     <tr key={u.id} style={{background:i%2===0?'white':'#fafafa',borderTop:'1px solid #e5e7eb'}}>
                       <td style={{padding:'10px 13px',fontWeight:600}}>{u.name}</td>
                       <td style={{padding:'10px 13px'}}>{YL[u.year]||u.year}</td>
@@ -1295,7 +1327,7 @@ function AdminPanel({users,setUsers,adminPw,setAdminPw,teacherPw,setTeacherPw,si
 // ══════════ FONT HOVER PICKER ══════════
 const FONTS_LIST=['Assistant','Heebo','Rubik','Varela Round','Frank Ruhl Libre','Secular One','Bellefair','Amatic SC','Suez One','Noto Sans Hebrew','Noto Serif Hebrew','Tinos','Arimo','Cousine'];
 
-function FontHoverPicker({selEl}){
+function FontHoverPicker({selEl,dark=true}){
   const [open,setOpen]=useState(false);
   const [hovered,setHovered]=useState(null);
   const origFont=useRef(null);
@@ -1330,28 +1362,21 @@ function FontHoverPicker({selEl}){
 
   return(
     <div style={{position:'relative',display:'inline-block'}}>
-      <button onClick={openList}
-        style={{padding:'4px 10px',borderRadius:'6px',background:'rgba(255,255,255,.12)',
-          border:'1px solid rgba(255,255,255,.2)',color:'white',fontSize:'.75rem',
-          cursor:'pointer',fontWeight:600,whiteSpace:'nowrap'}}>
+      <button onClick={openList} style={{padding:'4px 10px',borderRadius:'7px',background:dark?'rgba(255,255,255,.12)':'#f3f4f6',border:'1px solid '+(dark?'rgba(255,255,255,.2)':'#e5e7eb'),color:dark?'white':'#374151',fontSize:'.8rem',cursor:'pointer',fontWeight:600,whiteSpace:'nowrap',width:dark?'auto':'100%',textAlign:'right'}}>
         {hovered||'פונט ▾'}
       </button>
       {open&&(
         <div ref={listRef}
           onMouseLeave={onListLeave}
           style={{position:'absolute',top:'calc(100% + 4px)',right:0,
-            background:'#1e1b4b',border:'1px solid rgba(255,255,255,.15)',
+            background:dark?'#1e1b4b':'white',border:'1px solid '+(dark?'rgba(255,255,255,.15)':'#e5e7eb'),
             borderRadius:'10px',overflow:'hidden auto',zIndex:10000,
             boxShadow:'0 8px 32px rgba(0,0,0,.6)',width:'190px',maxHeight:'300px'}}>
           {FONTS_LIST.map(f=>(
             <div key={f}
               onMouseEnter={()=>onRowEnter(f)}
               onClick={()=>applyFont(f)}
-              style={{padding:'9px 14px',cursor:'pointer',color:'white',
-                fontFamily:`'${f}',sans-serif`,fontSize:'1rem',lineHeight:'1.3',
-                background:hovered===f?'rgba(74,111,165,.6)':'transparent',
-                borderBottom:'1px solid rgba(255,255,255,.05)',
-                userSelect:'none'}}>
+              style={{padding:'9px 14px',cursor:'pointer',color:dark?'white':'#374151',fontFamily:`'${f}',sans-serif`,fontSize:'1rem',lineHeight:'1.3',background:hovered===f?(dark?'rgba(74,111,165,.6)':'rgba(74,111,165,.1)'):'transparent',borderBottom:'1px solid '+(dark?'rgba(255,255,255,.05)':'#f3f4f6'),userSelect:'none'}}>
               {f}
             </div>
           ))}
@@ -1537,6 +1562,8 @@ function LoginEditor({onClose,onSave,saving,saved,editC,setEditC}){
 function VisualEditor({onClose,editC,setEditC,editR,setR,getR,editTh,setEditTh,onSave,saving,saved,users,reqOv}){
   const [browseMode,setBrowseMode]=useState(true);
   const [dragMode,setDragMode]=useState(false);
+  const [panelOpen,setPanelOpen]=useState(true);
+  const domEdits=useRef({}); // stores DOM edits bypassing React
   const [previewView,setPreviewView]=useState('dashboard');
   const [selEl,setSelEl]=useState(null);
   const [selText,setSelText]=useState('');
@@ -1570,46 +1597,34 @@ function VisualEditor({onClose,editC,setEditC,editR,setR,getR,editTh,setEditTh,o
   const handleDragMouseDown=e=>{
     if(!dragMode) return;
     const el=e.target;
-    if(['HTML','BODY'].includes(el.tagName)) return;
+    if(!el.innerText?.trim()) return;
     e.preventDefault(); e.stopPropagation();
-    // Prepare element for dragging
-    const rect=el.getBoundingClientRect();
-    const parentRect=el.parentElement?.getBoundingClientRect()||{left:0,top:0};
-    el.style.position='relative';
-    el.style.zIndex='9999';
+    const cur=el.style.transform||'';
+    const parts=cur.replace('translate(','').replace(')','').split(',');
+    const tx=parts.length===2?parseFloat(parts[0]):0;
+    const ty=parts.length===2?parseFloat(parts[1]):0;
+    draggingEl.current=el;
+    dragOffset.current={startX:e.clientX,startY:e.clientY,tx,ty};
     el.style.outline='2px dashed #f59e0b';
-    el.style.outlineOffset='3px';
+    el.style.outlineOffset='2px';
     el.style.cursor='grabbing';
     el.style.userSelect='none';
-    draggingEl.current=el;
-    dragOffset.current={
-      x: e.clientX - rect.left,
-      y: e.clientY - rect.top
-    };
-    setStatus('גורר — שחרר כדי למקם');
+    el.style.zIndex='9999';
+    setStatus('גורר...');
   };
-
   const handleDragMouseMove=useCallback(e=>{
     if(!dragMode||!draggingEl.current) return;
-    const el=draggingEl.current;
-    const parent=el.parentElement;
-    if(!parent) return;
-    const parentRect=parent.getBoundingClientRect();
-    const x=e.clientX-parentRect.left-dragOffset.current.x;
-    const y=e.clientY-parentRect.top-dragOffset.current.y;
-    el.style.position='absolute';
-    el.style.left=x+'px';
-    el.style.top=y+'px';
-    el.style.margin='0';
+    const {startX,startY,tx,ty}=dragOffset.current;
+    const dx=e.clientX-startX;
+    const dy=e.clientY-startY;
+    draggingEl.current.style.transform='translate('+(tx+dx)+'px,'+(ty+dy)+'px)';
   },[dragMode]);
-
   const handleDragMouseUp=useCallback(()=>{
     if(!draggingEl.current) return;
-    const el=draggingEl.current;
-    el.style.cursor='grab';
-    el.style.outline='2px solid #f59e0b';
+    draggingEl.current.style.cursor='grab';
+    draggingEl.current.style.outline='2px solid #f59e0b';
     draggingEl.current=null;
-    setStatus('אלמנט הוזז — בחר כלי הזזה שוב להזזה נוספת');
+    setStatus('הוזז');
   },[]);
 
   useEffect(()=>{
@@ -1623,63 +1638,106 @@ function VisualEditor({onClose,editC,setEditC,editR,setR,getR,editTh,setEditTh,o
     }
   },[dragMode,handleDragMouseMove,handleDragMouseUp]);
 
+  // Single click in browse mode = nav
   const handleClick=e=>{
-    if(dragMode) return; // drag mode handles its own events
+    if(dragMode) return;
     if(browseMode){
-      // In browse mode: allow nav button clicks
       const btn=e.target.closest('button[data-view]');
       if(btn){ setPreviewView(btn.dataset.view); }
-      return;
     }
-    // Edit mode
-    const el=e.target;
-    if(['BUTTON','A','INPUT','TEXTAREA','SELECT','IMG','SVG','PATH'].includes(el.tagName)) return;
-    const txt=(el.innerText||'').trim();
-    if(!txt || txt.length>300 || txt.length<1) return;
-    e.stopPropagation(); e.preventDefault();
+  };
 
+  // Double-click = enter text editing at cursor position
+  const handleDblClick=e=>{
+    if(dragMode||browseMode) return;
+    // Find nearest element with text content (leaf node)
+    let el=e.target;
+    while(el && el.children.length>0 && !el.dataset.veLeaf){
+      // Walk UP if the element has only one meaningful child
+      const textNodes=[...el.childNodes].filter(n=>n.nodeType===3&&n.textContent.trim());
+      if(textNodes.length>0) break;
+      // If no direct text, try the element itself
+      if((el.innerText||'').trim()) break;
+      el=el.parentElement;
+      if(!el||el===document.body) return;
+    }
+    if(!el||(el.innerText||'').trim().length===0) return;
+    if(['BUTTON','A','INPUT','SELECT','IMG','SVG'].includes(el.tagName)) return;
+    
     // Deselect previous
-    if(selEl){
-      const prev=document.querySelector('[data-ve-editing]');
-      if(prev){prev.removeAttribute('data-ve-editing');prev.style.outline='';prev.contentEditable='inherit';}
+    const prev=document.querySelector('[data-ve-editing]');
+    if(prev&&prev!==el){
+      prev.removeAttribute('data-ve-editing');
+      prev.style.outline='';
+      prev.contentEditable='false';
     }
 
-    // Mark new selection
+    // Make editable — browser handles cursor placement
     el.setAttribute('data-ve-editing','1');
-    el.style.outline='2px solid var(--a1)';
-    el.style.outlineOffset='2px';
-    el.style.cursor='text';
+    el.style.outline='2px solid #4a6fa5';
+    el.style.outlineOffset='1px';
     el.contentEditable='true';
     el.focus();
-    try{const r=document.createRange();r.selectNodeContents(el);const s=window.getSelection();s.removeAllRanges();s.addRange(r);}catch(e){}
+    // Place cursor at click position (browser default after dblclick selects word)
+    // Clear the word selection so user can type freely
+    const sel=window.getSelection();
+    if(sel&&sel.rangeCount>0){
+      const range=sel.getRangeAt(0);
+      range.collapse(true); // collapse to start
+    }
 
     const cs=window.getComputedStyle(el);
     setSelEl(el);
+    setSelText(el.innerText||'');
+    setSelColor(rgbToHex(cs.color));
+    setStatus('עורך — הקלד, גרור לסימון, Ctrl+Z לביטול');
+  };
+
+  // Sync when user types directly in preview (contentEditable)
+  const handleInput=e=>{
+    const el=e.target.closest('[contenteditable="true"]')||document.querySelector('[data-ve-editing]');
+    if(!el) return;
+    const txt=el.innerText||'';
     setSelText(txt);
-    setSelColor(cs.color||'#333333');
-    setStatus('עורך: "'+txt.substring(0,40)+'"');
+    // Store in domEdits ref (survives React re-renders)
+    if(el.dataset&&el.dataset.veField){
+      domEdits.current[el.dataset.veField]=txt;
+    }
+    // Also track by element ID for non-field elements
+    if(selEl){
+      domEdits.current['__lastText']=txt;
+    }
   };
 
   const applyText=v=>{
     setSelText(v);
     const el=document.querySelector('[data-ve-editing]');
-    if(el) el.innerText=v;
+    if(el){
+      el.innerText=v;
+      // If element has a data-ve-field, update editC directly
+      if(el.dataset&&el.dataset.veField){
+        setEditC(prev=>({...prev,[el.dataset.veField]:v}));
+      }
+    }
   };
   const applyColor=v=>{
     setSelColor(v);
     const el=document.querySelector('[data-ve-editing]');
     if(el) el.style.color=v;
+    // Store color change in domEdits if element has field tag
+    if(el&&el.dataset&&el.dataset.veField){
+      domEdits.current[el.dataset.veField+'_color']=v;
+    }
   };
 
   const toggleMode=()=>{
     if(!browseMode){
-      // Leaving edit mode — deselect
       const el=document.querySelector('[data-ve-editing]');
       if(el){el.removeAttribute('data-ve-editing');el.style.outline='';el.contentEditable='inherit';}
       setSelEl(null);
     }
     setBrowseMode(!browseMode);
-    setStatus(!browseMode ? 'מצב ניווט — לחץ על כפתורי התפריט לניווט' : 'מצב עריכה — לחץ על כל טקסט לעריכה');
+    setStatus(!browseMode ? 'מצב ניווט — לחץ על כפתורי התפריט לניווט' : 'לחץ פעמיים על טקסט לעריכה • גרור לסימון');
   };
 
   const isFem=previewUser.gender==='female';
@@ -1692,178 +1750,110 @@ function VisualEditor({onClose,editC,setEditC,editR,setR,getR,editTh,setEditTh,o
 
   return(
     <div style={{position:'fixed',inset:0,zIndex:9999,display:'flex',flexDirection:'column'}}>
-      {/* ── TOP BAR ── */}
-      <div style={{background:'#1e1b4b',color:'white',padding:'9px 16px',display:'flex',alignItems:'center',gap:'10px',flexShrink:0,zIndex:10001,borderBottom:'1px solid rgba(255,255,255,.1)',flexWrap:'wrap'}}>
-        <span style={{fontWeight:800,fontSize:'.9rem',whiteSpace:'nowrap'}}>עורך ויזואלי</span>
+      {/* TOP BAR */}
+      <div style={{background:'#1e1b4b',color:'white',padding:'8px 14px',display:'flex',alignItems:'center',gap:'9px',flexShrink:0,zIndex:10001,borderBottom:'1px solid rgba(255,255,255,.1)',flexWrap:'wrap'}}>
+        <span style={{fontWeight:800,fontSize:'.88rem',whiteSpace:'nowrap'}}>עורך ויזואלי</span>
 
-        {/* MODE TOGGLE — the main control */}
-        <button onClick={toggleMode} style={{
-          padding:'6px 16px',borderRadius:'20px',fontWeight:700,fontSize:'.84rem',
-          cursor:'pointer',border:'2px solid',transition:'all .2s',whiteSpace:'nowrap',
-          background: browseMode ? 'rgba(255,255,255,.15)' : '#4a6fa5',
-          borderColor: browseMode ? 'rgba(255,255,255,.3)' : '#4a6fa5',
-          color:'white',
-          boxShadow: !browseMode ? '0 0 12px rgba(74,111,165,.5)' : 'none'
-        }}>
-          {browseMode ? '🔍 ניווט' : '✏️ עריכה'}
+        <button onClick={toggleMode} style={{padding:'5px 14px',borderRadius:'20px',fontWeight:700,fontSize:'.82rem',cursor:'pointer',border:'2px solid',whiteSpace:'nowrap',
+          background:browseMode?'rgba(255,255,255,.15)':'#4a6fa5',borderColor:browseMode?'rgba(255,255,255,.3)':'#4a6fa5',color:'white'}}>
+          {browseMode?'🔍 ניווט':'✏️ עריכה'}
         </button>
 
-        {/* DRAG TOOL button */}
-        <button onClick={()=>{
-          setDragMode(!dragMode);
-          if(!dragMode){setBrowseMode(false);setStatus('כלי הזזה פעיל — לחץ וגרור כל אלמנט');}
-          else setStatus('כלי הזזה כבוי');
-        }} style={{
-          padding:'6px 14px',borderRadius:'20px',fontWeight:700,fontSize:'.84rem',
-          cursor:'pointer',border:'2px solid',transition:'all .2s',whiteSpace:'nowrap',
-          background: dragMode ? '#f59e0b' : 'rgba(255,255,255,.12)',
-          borderColor: dragMode ? '#f59e0b' : 'rgba(255,255,255,.25)',
-          color: dragMode ? '#1e1b4b' : 'white',
-          boxShadow: dragMode ? '0 0 12px rgba(245,158,11,.5)' : 'none'
-        }}>
-          ✥ הזזה{dragMode?' — פעיל':''}
+        <button onClick={()=>{setDragMode(!dragMode);if(!dragMode){setBrowseMode(false);setStatus('כלי הזזה — לחץ וגרור');}else setStatus('');}}
+          style={{padding:'5px 13px',borderRadius:'20px',fontWeight:700,fontSize:'.82rem',cursor:'pointer',border:'2px solid',whiteSpace:'nowrap',
+            background:dragMode?'#f59e0b':'rgba(255,255,255,.12)',borderColor:dragMode?'#f59e0b':'rgba(255,255,255,.25)',color:dragMode?'#1e1b4b':'white'}}>
+          ✥ הזזה
         </button>
 
-        {/* Gender toggle */}
         <div style={{display:'flex',borderRadius:'20px',overflow:'hidden',border:'1px solid rgba(255,255,255,.25)',flexShrink:0}}>
           {[['female','נקבה'],['male','זכר']].map(([g,l])=>(
-            <button key={g} onClick={()=>setPreviewGender(g)}
-              style={{padding:'5px 12px',border:'none',cursor:'pointer',fontSize:'.76rem',fontWeight:700,
-                background:previewGender===g?'white':'transparent',
-                color:previewGender===g?'#3d5a8a':'rgba(255,255,255,.75)'}}>
-              {l}
-            </button>
+            <button key={g} onClick={()=>{setPreviewGender(g);if(g==='male'&&previewYear==='4')setPreviewYear('3');}} style={{padding:'4px 10px',border:'none',cursor:'pointer',fontSize:'.74rem',fontWeight:700,background:previewGender===g?'white':'transparent',color:previewGender===g?'#3d5a8a':'rgba(255,255,255,.75)'}}>{l}</button>
           ))}
         </div>
 
-        {/* Year toggle */}
         <div style={{display:'flex',borderRadius:'20px',overflow:'hidden',border:'1px solid rgba(255,255,255,.25)',flexShrink:0}}>
-          {[['2',"שנה ב'"],['3',"שנה ג'"],['4',"שנה ד'"]].map(([y,l])=>(
-            <button key={y} onClick={()=>setPreviewYear(y)}
-              style={{padding:'5px 10px',border:'none',cursor:'pointer',fontSize:'.73rem',fontWeight:700,
-                background:previewYear===y?'white':'transparent',
-                color:previewYear===y?'#3d5a8a':'rgba(255,255,255,.75)'}}>
-              {l}
-            </button>
+          {(previewGender==='male'?[['2',"ב'"],['3',"ג'"]]:([['2',"ב'"],['3',"ג'"],['4',"ד'"]])).map(([y,l])=>(
+            <button key={y} onClick={()=>setPreviewYear(y)} style={{padding:'4px 9px',border:'none',cursor:'pointer',fontSize:'.72rem',fontWeight:700,background:previewYear===y?'white':'transparent',color:previewYear===y?'#3d5a8a':'rgba(255,255,255,.75)'}}>{l}</button>
           ))}
         </div>
 
-        {/* Font pickers */}
-        <select value={bodyFont} onChange={e=>{setBodyFont(e.target.value);setEditC({...editC,bodyFont:e.target.value});}}
-          style={{padding:'4px 8px',borderRadius:'7px',background:'rgba(255,255,255,.12)',border:'1px solid rgba(255,255,255,.2)',color:'white',fontSize:'.75rem',cursor:'pointer',maxWidth:'130px'}}>
-          <option value="" disabled style={{background:'#1e1b4b'}}>גוף טקסט</option>
-          {['Assistant','Heebo','Rubik','Varela Round','Frank Ruhl Libre','Secular One','Bellefair','Amatic SC','Suez One','Noto Sans Hebrew','Noto Serif Hebrew','Tinos','Arimo','Cousine'].map(f=>(
-            <option key={f} value={f} style={{background:'#1e1b4b',fontFamily:f}}>{f}</option>
-          ))}
-        </select>
-
-        <select value={headingFont} onChange={e=>{setHeadingFont(e.target.value);setEditC({...editC,headingFont:e.target.value});}}
-          style={{padding:'4px 8px',borderRadius:'7px',background:'rgba(255,255,255,.12)',border:'1px solid rgba(255,255,255,.2)',color:'white',fontSize:'.75rem',cursor:'pointer',maxWidth:'130px'}}>
-          <option value="" disabled style={{background:'#1e1b4b'}}>כותרות</option>
-          {['Heebo','Assistant','Rubik','Varela Round','Frank Ruhl Libre','Secular One','Bellefair','Amatic SC','Suez One','Noto Sans Hebrew','Noto Serif Hebrew','Tinos','Arimo','Cousine'].map(f=>(
-            <option key={f} value={f} style={{background:'#1e1b4b',fontFamily:f}}>{f}</option>
-          ))}
-        </select>
-
-        <span style={{fontSize:'.73rem',color:'rgba(255,255,255,.45)',flex:1,minWidth:0,overflow:'hidden',whiteSpace:'nowrap',textOverflow:'ellipsis'}}>
-          {status}
-        </span>
-
-        {/* Theme switcher */}
         <div style={{display:'flex',gap:'4px'}}>
           {Object.entries(THEMES).map(([k,t])=>(
-            <button key={k} onClick={()=>setEditTh(k)}
-              style={{padding:'4px 8px',borderRadius:'6px',fontSize:'.7rem',fontWeight:700,border:'none',cursor:'pointer',
-                background:editTh===k?'white':'rgba(255,255,255,.12)',
-                color:editTh===k?'#3d5a8a':'rgba(255,255,255,.75)'}}>
+            <button key={k} onClick={()=>setEditTh(k)} style={{padding:'3px 8px',borderRadius:'6px',fontSize:'.7rem',fontWeight:700,border:'none',cursor:'pointer',background:editTh===k?'white':'rgba(255,255,255,.12)',color:editTh===k?'#3d5a8a':'rgba(255,255,255,.75)'}}>
               {t.label.split(' ')[0]}
             </button>
           ))}
         </div>
 
-        {/* Edit controls */}
-        {!browseMode && selEl && (
-          <div style={{display:'flex',alignItems:'center',gap:'7px',background:'rgba(255,255,255,.08)',padding:'5px 10px',borderRadius:'8px',flexWrap:'wrap'}}>
-            <input value={selText} onChange={e=>applyText(e.target.value)}
-              style={{padding:'4px 9px',borderRadius:'6px',background:'rgba(255,255,255,.12)',border:'1px solid rgba(255,255,255,.2)',color:'white',fontFamily:'Heebo,sans-serif',fontSize:'.85rem',minWidth:'140px',maxWidth:'260px'}}
-              placeholder="טקסט..."/>
-            <label style={{fontSize:'.7rem',color:'rgba(255,255,255,.45)'}}>צבע:</label>
-            <input type="color" value={selColor||'#333333'} onChange={e=>applyColor(e.target.value)}
-              style={{width:'28px',height:'24px',borderRadius:'4px',border:'none',cursor:'pointer',padding:'1px'}}/>
-            <label style={{fontSize:'.7rem',color:'rgba(255,255,255,.45)'}}>גודל:</label>
-            <div style={{display:'flex',alignItems:'center',gap:'3px'}}>
-              <button onClick={()=>{if(selEl){const s=parseFloat(window.getComputedStyle(selEl).fontSize)||16;selEl.style.fontSize=(s-1)+'px';}}} style={{width:'22px',height:'22px',borderRadius:'4px',background:'rgba(255,255,255,.15)',color:'white',border:'none',cursor:'pointer',fontWeight:700,fontSize:'.9rem',lineHeight:1}}>−</button>
-              <span style={{fontSize:'.75rem',color:'white',minWidth:'28px',textAlign:'center'}}>
-                {selEl?Math.round(parseFloat(window.getComputedStyle(selEl).fontSize)||16)+'px':'—'}
-              </span>
-              <button onClick={()=>{if(selEl){const s=parseFloat(window.getComputedStyle(selEl).fontSize)||16;selEl.style.fontSize=(s+1)+'px';}}} style={{width:'22px',height:'22px',borderRadius:'4px',background:'rgba(255,255,255,.15)',color:'white',border:'none',cursor:'pointer',fontWeight:700,fontSize:'.9rem',lineHeight:1}}>+</button>
-            </div>
-            <label style={{fontSize:'.7rem',color:'rgba(255,255,255,.45)'}}>פונט:</label>
-            <FontHoverPicker selEl={selEl}/>
-          </div>
-        )}
+        <span style={{flex:1,fontSize:'.72rem',color:'rgba(255,255,255,.45)',overflow:'hidden',whiteSpace:'nowrap',textOverflow:'ellipsis'}}>{status}</span>
 
-        <button onClick={onSave} disabled={saving}
-          style={{padding:'6px 14px',borderRadius:'7px',background:saved?'#10b981':'#4a6fa5',color:'white',fontWeight:700,border:'none',cursor:'pointer',fontSize:'.82rem',whiteSpace:'nowrap'}}>
+        <button onClick={()=>{
+          // Merge domEdits (user's direct DOM edits) into editC
+          // Build final data
+          const toSave={...editC,...domEdits.current};
+          delete toSave['__lastText'];
+          if(bodyFont) toSave.bodyFont=bodyFont;
+          if(headingFont) toSave.headingFont=headingFont;
+          document.querySelectorAll('[data-ve-field]').forEach(el=>{
+            const field=el.dataset.veField;
+            if(field&&el.innerText&&el.innerText.trim()) toSave[field]=el.innerText.trim();
+          });
+          setEditC(toSave);
+          // Save directly to Firebase — no prop chain, no race condition
+          const doSave=async()=>{
+            try{
+              // Ensure auth
+              if(!auth.currentUser) await auth.signInAnonymously();
+              await db.collection('settings').doc('siteContent').set({content:toSave,reqOv:editR},{merge:true});
+              await db.collection('settings').doc('general').set({theme:editTh},{merge:true});
+              onSave(toSave); // notify parent for UI feedback
+            }catch(err){
+              alert('שגיאת שמירה: '+err.message+'\n\nודא שחוקי Firebase מאפשרים כתיבה.');
+            }
+          };
+          doSave();
+        }} disabled={saving}
+          style={{padding:'5px 13px',borderRadius:'7px',background:saved?'#10b981':'#4a6fa5',color:'white',fontWeight:700,border:'none',cursor:'pointer',fontSize:'.81rem'}}>
           {saving?'שומר...':saved?'נשמר ✓':'שמור'}
         </button>
-        <button onClick={()=>{
-          const el=document.querySelector('[data-ve-editing]');
-          if(el){el.removeAttribute('data-ve-editing');el.style.outline='';el.contentEditable='inherit';}
-          onClose();
-        }} style={{padding:'6px 11px',borderRadius:'7px',background:'rgba(239,68,68,.75)',color:'white',fontWeight:700,border:'none',cursor:'pointer'}}>סגור</button>
+        <button onClick={onClose} style={{padding:'5px 10px',borderRadius:'7px',background:'rgba(239,68,68,.75)',color:'white',fontWeight:700,border:'none',cursor:'pointer'}}>סגור</button>
       </div>
 
-      {/* ── PREVIEW AREA ── */}
-      <div style={{flex:1,overflowY:'auto',overflowX:'hidden',background:'var(--bg)',
-          cursor:dragMode?'grab':browseMode?'default':'crosshair'}}
+      {/* PREVIEW — full width, floating edit popup */}
+      <div style={{flex:1,overflow:'auto',background:'var(--bg)',position:'relative',
+          cursor:dragMode?'grab':browseMode?'default':'text'}}
         onClick={handleClick}
+        onDoubleClick={handleDblClick}
+        onInput={handleInput}
         onMouseDown={dragMode?handleDragMouseDown:undefined}>
 
-        {/* Edit mode overlay hint */}
-        {!browseMode && (
-          <div style={{position:'sticky',top:0,zIndex:500,background:'rgba(74,111,165,.12)',
-            borderBottom:'2px dashed rgba(74,111,165,.4)',padding:'6px 20px',
-            fontSize:'.78rem',color:'var(--a1)',fontWeight:600,textAlign:'center',
-            backdropFilter:'blur(4px)'}}>
-            מצב עריכה פעיל — לחץ על כל טקסט לעריכה ישירה
+        {!browseMode&&!dragMode&&(
+          <div style={{position:'sticky',top:0,zIndex:50,background:'rgba(74,111,165,.1)',borderBottom:'2px dashed rgba(74,111,165,.3)',padding:'5px 16px',fontSize:'.76rem',color:'var(--a1)',fontWeight:600,textAlign:'center'}}>
+            לחץ פעמיים על טקסט לעריכה • גרור לסימון טקסט
           </div>
         )}
 
         {/* Fake header */}
-        <div className="app-hdr" style={{position:'sticky',top:browseMode?0:'34px',zIndex:100}}>
+        <div className="app-hdr" style={{position:'sticky',top:!browseMode&&!dragMode?'29px':0,zIndex:40}}>
           <div style={{maxWidth:'1400px',width:'100%',margin:'0 auto',padding:'10px 40px',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
             <div style={{display:'flex',alignItems:'center',gap:'18px'}}>
-              <img src={`data:image/png;base64,${LOGO}`} className="logo-img" style={{height:'100px',width:'auto'}}/>
-              <div style={{borderRight:'2px solid var(--brd)',paddingRight:'18px'}}>
-                <div style={{fontWeight:800,fontSize:'1.1rem',color:'var(--txt)'}}>{editC.title||'מכללת תורת הנפש'}</div>
-                <div style={{fontSize:'.72rem',color:'var(--sub)'}}>{editC.subtitle||'יומן תלמיד-ה | מעקב הכשרה'}</div>
-              </div>
-            </div>
-            <div style={{display:'flex',alignItems:'center',gap:'14px'}}>
-              <div style={{textAlign:'right'}}>
-                <div style={{fontWeight:700,fontSize:'.9rem',color:'var(--txt)'}}>{previewUser.name}</div>
-                <div style={{fontSize:'.72rem',color:'var(--sub)'}}>שנה ב'</div>
+              <img src={`data:image/png;base64,${LOGO}`} className="logo-img" style={{height:'90px',width:'auto'}}/>
+              <div style={{borderRight:'2px solid var(--brd)',paddingRight:'16px'}}>
+                <div data-ve-field="title" style={{fontWeight:800,fontSize:'1rem',color:'var(--txt)'}}>{editC.title||'מכללת תורת הנפש'}</div>
+                <div data-ve-field="subtitle" style={{fontSize:'.72rem',color:'var(--sub)'}}>{editC.subtitle||'יומן תלמיד-ה | מעקב הכשרה'}</div>
               </div>
             </div>
           </div>
         </div>
 
-        {/* Fake nav — clickable in browse mode */}
-        <div style={{background:'var(--bg)',borderBottom:'1px solid var(--brd)',padding:'10px 40px',
-          display:'flex',gap:'6px',overflowX:'auto',position:'sticky',top:browseMode?'120px':'154px',zIndex:99}}>
-          <div style={{maxWidth:'1400px',width:'100%',margin:'0 auto',display:'flex',gap:'6px',flexWrap:'nowrap'}}>
+        {/* Nav */}
+        <div style={{background:'var(--bg)',borderBottom:'1px solid var(--brd)',padding:'8px 40px',position:'sticky',top:'110px',zIndex:39}}>
+          <div style={{maxWidth:'1400px',margin:'0 auto',display:'flex',gap:'6px',flexWrap:'nowrap',overflowX:'auto'}}>
             {navItems.map(n=>(
               <button key={n.id} data-view={n.id}
                 onClick={e=>{if(browseMode){e.stopPropagation();setPreviewView(n.id);}}}
                 className="nav-tab"
-                style={{
-                  background:previewView===n.id?`linear-gradient(135deg,var(--nf),var(--nt))`:'var(--card)',
-                  color:previewView===n.id?'white':'var(--txt)',
-                  border:previewView===n.id?'none':'1px solid var(--brd)',
-                  cursor:browseMode?'pointer':'crosshair',
-                  pointerEvents: browseMode?'auto':'none'
-                }}>
+                style={{background:previewView===n.id?`linear-gradient(135deg,var(--nf),var(--nt))`:'var(--card)',color:previewView===n.id?'white':'var(--txt)',border:previewView===n.id?'none':'1px solid var(--brd)',cursor:browseMode?'pointer':'default',pointerEvents:browseMode?'auto':'none'}}>
                 {n.l}
               </button>
             ))}
@@ -1871,21 +1861,59 @@ function VisualEditor({onClose,editC,setEditC,editR,setR,getR,editTh,setEditTh,o
         </div>
 
         {/* Content */}
-        <div style={{maxWidth:'1400px',width:'100%',margin:'0 auto',padding:'24px 40px',boxSizing:'border-box',
-          pointerEvents: browseMode ? 'none' : 'auto'}}>
-          {previewView==='dashboard' && <Dashboard user={previewUser} setView={()=>{}} req={req} siteC={editC}/>}
-          {previewView==='practical'  && <PracticalHours user={previewUser} updateUser={()=>{}} req={req}/>}
-          {previewView==='supervision'&& <SupervisionHours user={previewUser} updateUser={()=>{}} req={req}/>}
-          {previewView==='case'       && <CasePresentation user={previewUser} updateUser={()=>{}} req={req}/>}
-          {previewView==='impact'     && <ImpactHours user={previewUser} updateUser={()=>{}} req={req}/>}
-          {previewView==='contacts'   && <Contacts user={previewUser}/>}
+        <div style={{maxWidth:'1400px',width:'100%',margin:'0 auto',padding:'20px 40px',boxSizing:'border-box'}}>
+          {previewView==='dashboard'&&<Dashboard user={previewUser} setView={setPreviewView} req={req} siteC={editC}/>}
+          {previewView==='practical'&&<PracticalHours user={previewUser} updateUser={()=>{}} req={req}/>}
+          {previewView==='supervision'&&<SupervisionHours user={previewUser} updateUser={()=>{}} req={req}/>}
+          {previewView==='case'&&<CasePresentation user={previewUser} updateUser={()=>{}} req={req}/>}
+          {previewView==='impact'&&<ImpactHours user={previewUser} updateUser={()=>{}} req={req}/>}
+          {previewView==='contacts'&&<Contacts user={previewUser}/>}
         </div>
         <Footer siteC={editC}/>
-      </div>
 
-      {/* Bottom hint */}
-      <div style={{background:'#1e1b4b',padding:'5px 16px',textAlign:'center',fontSize:'.72rem',color:'rgba(255,255,255,.35)',flexShrink:0}}>
-        {browseMode ? 'מצב ניווט — לחץ על כפתורי התפריט לניווט בין הדפים' : 'מצב עריכה — לחץ על כל טקסט לעריכה ישירה'}
+        {/* FLOATING EDIT PANEL — appears when element selected, bottom-left corner */}
+        {selEl&&!browseMode&&(
+          <div style={{position:'fixed',bottom:'20px',left:'20px',zIndex:10000,
+            background:'white',borderRadius:'14px',padding:'14px',
+            boxShadow:'0 8px 32px rgba(0,0,0,.2)',border:'1px solid #e5e7eb',
+            minWidth:'220px',maxWidth:'280px'}}>
+            <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'10px'}}>
+              <span style={{fontSize:'.76rem',fontWeight:700,color:'#374151'}}>עריכת אלמנט</span>
+              <button onClick={()=>{const el=document.querySelector('[data-ve-editing]');if(el){el.removeAttribute('data-ve-editing');el.style.outline='';el.contentEditable='inherit';}setSelEl(null);}}
+                style={{background:'none',border:'none',cursor:'pointer',color:'#9ca3af',fontSize:'1rem',lineHeight:1}}>×</button>
+            </div>
+            <div style={{display:'flex',flexDirection:'column',gap:'8px'}}>
+              <div>
+                <label style={{display:'block',fontSize:'.72rem',fontWeight:700,color:'#6b7280',marginBottom:'3px'}}>טקסט</label>
+                <input value={selText} onChange={e=>{setSelText(e.target.value);applyText(e.target.value);}}
+                  style={{width:'100%',padding:'6px 9px',border:'1.5px solid #e5e7eb',borderRadius:'7px',fontFamily:'Assistant,sans-serif',fontSize:'.85rem',boxSizing:'border-box'}}/>
+              </div>
+              <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'7px'}}>
+                <div>
+                  <label style={{display:'block',fontSize:'.72rem',fontWeight:700,color:'#6b7280',marginBottom:'3px'}}>צבע</label>
+                  <input type="color" value={selColor&&selColor.startsWith('#')?selColor:'#333333'} onChange={e=>applyColor(e.target.value)}
+                    style={{width:'100%',height:'30px',borderRadius:'6px',border:'1.5px solid #e5e7eb',cursor:'pointer',padding:'2px'}}/>
+                </div>
+                <div>
+                  <label style={{display:'block',fontSize:'.72rem',fontWeight:700,color:'#6b7280',marginBottom:'3px'}}>גודל</label>
+                  <div style={{display:'flex',alignItems:'center',gap:'3px'}}>
+                    <button onClick={()=>{if(selEl){const s=parseFloat(window.getComputedStyle(selEl).fontSize)||16;selEl.style.fontSize=(s-1)+'px';}}}
+                      style={{flex:1,padding:'4px',borderRadius:'5px',background:'#f3f4f6',border:'1px solid #e5e7eb',cursor:'pointer',fontWeight:700}}>−</button>
+                    <span style={{fontSize:'.77rem',fontWeight:700,color:'#374151',minWidth:'26px',textAlign:'center'}}>
+                      {selEl?Math.round(parseFloat(window.getComputedStyle(selEl).fontSize)||16):16}
+                    </span>
+                    <button onClick={()=>{if(selEl){const s=parseFloat(window.getComputedStyle(selEl).fontSize)||16;selEl.style.fontSize=(s+1)+'px';}}}
+                      style={{flex:1,padding:'4px',borderRadius:'5px',background:'#f3f4f6',border:'1px solid #e5e7eb',cursor:'pointer',fontWeight:700}}>+</button>
+                  </div>
+                </div>
+              </div>
+              <div>
+                <label style={{display:'block',fontSize:'.72rem',fontWeight:700,color:'#6b7280',marginBottom:'3px'}}>פונט</label>
+                <FontHoverPicker selEl={selEl} dark={false}/>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
