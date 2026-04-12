@@ -249,10 +249,17 @@ function App(){
           const raw=d.data().content||{};
           // Strip legacy elStyles (caused Firestore errors) — keep only plain fields
           const {elStyles:_dropped,...cont}=raw;
-          setSiteC(cont); setReqOv(d.data().reqOv||{});
-          if(cont.bodyFont) document.body.style.fontFamily=`'${cont.bodyFont}',sans-serif`;
-          if(cont.headingFont){
-            const applyHF=()=>document.querySelectorAll('h1,h2,h3,h4').forEach(el=>el.style.fontFamily=`'${cont.headingFont}',sans-serif`);
+          // Promote veFields text values into top-level content so React renders them
+          const promoted={...cont};
+          if(cont.veFields){
+            Object.entries(cont.veFields).forEach(([k,f])=>{
+              if(typeof f.text==='string'&&f.text) promoted[k]=f.text;
+            });
+          }
+          setSiteC(promoted); setReqOv(d.data().reqOv||{});
+          if(promoted.bodyFont) document.body.style.fontFamily=`'${promoted.bodyFont}',sans-serif`;
+          if(promoted.headingFont){
+            const applyHF=()=>document.querySelectorAll('h1,h2,h3,h4').forEach(el=>el.style.fontFamily=`'${promoted.headingFont}',sans-serif`);
             applyHF(); setTimeout(applyHF,500);
           }
         }
