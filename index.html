@@ -131,7 +131,7 @@ input:focus,textarea:focus,select:focus{outline:none;border-color:var(--a1);box-
 <div id="root"></div>
 
 <script type="text/babel">
-const {useState,useEffect,useRef,useCallback} = React;
+const {useState,useEffect,useRef,useCallback,useMemo} = React;
 
 const FB = {
   apiKey:"AIzaSyAFkUNrD2CWIy98r_7hlEMHruY0_iOT9gU",
@@ -220,7 +220,10 @@ function rgbToHex(rgb){
 // ══════════ APP ROOT ══════════
 function App(){
   const [users,setUsers]=useState([]);
-  const [cur,setCur]=useState(null);
+  const [cur,setCur]=useState(()=>{
+    try{const s=localStorage.getItem('cur_user');return s?JSON.parse(s):null;}
+    catch(e){return null;}
+  });
   const [view,setView]=useState('dashboard');
   const [adminPw,setAdminPw]=useState('1234');
   const [teacherPw,setTeacherPw]=useState('1234');
@@ -256,15 +259,17 @@ function App(){
         const a=[];s.forEach(d=>a.push({id:d.id,...d.data()}));setUsers(a);
       }).catch(console.error);
     };
-    // Sign in anonymously first so Firestore rules allow reads
-    if(auth.currentUser){
-      loadAll();
-    } else {
-      auth.signInAnonymously().then(loadAll).catch(loadAll);
-    }
+    // Load directly — Firestore rules set to allow all
+    loadAll();
   },[]);
 
   useEffect(()=>{document.body.className='theme-'+theme;},[theme]);
+  useEffect(()=>{
+    try{
+      if(cur) localStorage.setItem('cur_user',JSON.stringify(cur));
+      else localStorage.removeItem('cur_user');
+    }catch(e){}
+  },[cur]);
   useEffect(()=>{
     if(users.length>0) users.forEach(u=>db.collection('users').doc(u.id).set(u).catch(console.error));
   },[users]);
@@ -273,8 +278,19 @@ function App(){
     const a=users.map(u=>u.id===cur.id?{...u,...upd}:u);
     setUsers(a);setCur({...cur,...upd});
   };
-  const saveSite=(c,r)=>db.collection('settings').doc('siteContent').set({content:c,reqOv:r},{merge:true})
-    .then(()=>{setSiteC(c);setReqOv(r);});
+  const sanitizeForFirestore=obj=>JSON.parse(JSON.stringify(obj,(key,val)=>{
+    if(val===null||val===undefined) return val;
+    if(typeof val==='function') return undefined;
+    if(typeof val==='object'&&typeof val.nodeType==='number') return undefined;
+    if(typeof val==='object'&&val.constructor&&val.constructor.name!=='Object'&&val.constructor.name!=='Array') return undefined;
+    return val;
+  }));
+  const saveSite=(c,r)=>{
+    const safeC=sanitizeForFirestore(c);
+    const safeR=sanitizeForFirestore(r);
+    return db.collection('settings').doc('siteContent').set({content:safeC,reqOv:safeR},{merge:true})
+      .then(()=>{setSiteC(safeC);setReqOv(safeR);});
+  };
   const saveTheme=t=>{setTheme(t);db.collection('settings').doc('general').set({theme:t},{merge:true}).catch(console.error);};
 
   // LOGO double-click → choose role
@@ -314,7 +330,7 @@ function App(){
     return <LoginPage users={users} setUsers={setUsers} setCur={setCur} onLogo={handleLogo}/>;
 
   return <MainApp user={cur} updateUser={updateUser} view={view} setView={setView}
-    onLogout={()=>{setCur(null);setView('login');}}
+    onLogout={()=>{setCur(null);setView('login');setIsAdmin(false);setIsTeacher(false);try{localStorage.removeItem('cur_user');}catch(e){};}}
     onLogo={handleLogo} reqOv={reqOv} siteC={siteC}/>;
 }
 
@@ -1015,6 +1031,8 @@ function AdminPanel({users,setUsers,adminPw,setAdminPw,teacherPw,setTeacherPw,si
   },[]);
   const [editC,setEditC]=useState({...siteC});
   const [editR,setEditR]=useState({...reqOv});
+  // Keep editC in sync when siteC updates from Firebase
+  useEffect(()=>{setEditC(prev=>({...siteC,...prev}));},[siteC]);
   const [editTh,setEditTh]=useState(theme);
   const [editAdminPw,setEditAdminPw]=useState(adminPw);
   const [editTeacherPw,setEditTeacherPw]=useState(teacherPw);
@@ -1035,6 +1053,7 @@ function AdminPanel({users,setUsers,adminPw,setAdminPw,teacherPw,setTeacherPw,si
     setSaving(true);
     try{
       const contentToSave=explicitC||editC;
+      if(explicitC) setEditC(explicitC); // sync state when called from VE
       await saveSite(contentToSave,editR);
       saveTheme(editTh);
       const genData={theme:editTh};
@@ -1327,7 +1346,7 @@ function AdminPanel({users,setUsers,adminPw,setAdminPw,teacherPw,setTeacherPw,si
 // ══════════ FONT HOVER PICKER ══════════
 const FONTS_LIST=['Assistant','Heebo','Rubik','Varela Round','Frank Ruhl Libre','Secular One','Bellefair','Amatic SC','Suez One','Noto Sans Hebrew','Noto Serif Hebrew','Tinos','Arimo','Cousine'];
 
-function FontHoverPicker({selEl,dark=true}){
+function FontHoverPicker({selEl,dark=true,onApply}){ 
   const [open,setOpen]=useState(false);
   const [hovered,setHovered]=useState(null);
   const origFont=useRef(null);
@@ -1356,6 +1375,7 @@ function FontHoverPicker({selEl,dark=true}){
   const applyFont=f=>{
     origFont.current=`'${f}',sans-serif`;
     if(selEl) selEl.style.fontFamily=`'${f}',sans-serif`;
+    if(onApply) onApply(f, selEl);
     setHovered(null);
     setOpen(false);
   };
@@ -1562,186 +1582,252 @@ function LoginEditor({onClose,onSave,saving,saved,editC,setEditC}){
 function VisualEditor({onClose,editC,setEditC,editR,setR,getR,editTh,setEditTh,onSave,saving,saved,users,reqOv}){
   const [browseMode,setBrowseMode]=useState(true);
   const [dragMode,setDragMode]=useState(false);
-  const [panelOpen,setPanelOpen]=useState(true);
-  const domEdits=useRef({}); // stores DOM edits bypassing React
   const [previewView,setPreviewView]=useState('dashboard');
-  const [selEl,setSelEl]=useState(null);
-  const [selText,setSelText]=useState('');
-  const [selColor,setSelColor]=useState('');
-  const [status,setStatus]=useState('מצב ניווט — לחץ על כפתורי התפריט לניווט');
   const [previewGender,setPreviewGender]=useState('female');
   const [previewYear,setPreviewYear]=useState('2');
-  const [bodyFont,setBodyFont]=useState('Assistant');
-  const [headingFont,setHeadingFont]=useState('Heebo');
+  const [bodyFont,setBodyFont]=useState(editC.bodyFont||'Assistant');
+  const [headingFont,setHeadingFont]=useState(editC.headingFont||'Heebo');
+  // Single source of truth: all editable text/style fields stored by key name
+  // fields: { fieldKey -> {text, color, fontSize, fontFamily} }
+  // fieldKey = data-ve-key attribute we stamp on every editable element
+  const [fields,setFields]=useState(()=>editC.veFields||{});
+  const [selKey,setSelKey]=useState(null);
+  const [status,setStatus]=useState('מצב ניווט');
   const draggingEl=useRef(null);
-  const dragOffset=useRef({x:0,y:0});
+  const dragOffset=useRef({});
+  const keyCounter=useRef(0);
+
+  // derive display values for panel from fields[selKey]
+  const selData=selKey?fields[selKey]||{}:{};
+
+  const mergedC=useMemo(()=>{
+    // Apply veFields back into the named content fields
+    const out={...editC,bodyFont,headingFont};
+    Object.entries(fields).forEach(([k,v])=>{ if(v&&v.text!=null) out[k]=v.text; });
+    return out;
+  },[editC,fields,bodyFont,headingFont]);
 
   const previewUser={
-    id:'preview',name:'תלמיד לדוגמה',year:previewYear,gender:previewGender,email:'preview@test.com',
-    practical:[{id:'1',num:'1',date:'2025-01-10',open:'פגישה ראשונה',topics:'היכרות',position:'חיובי',focus:'קשר',insights:'תובנות ראשוניות',challenge:'ביסוס אמון',lessons:'לקחים'}],
-    supervision:[{id:'1',date:'2025-01-15',inst:'אורלי טוויטו',topics:'ניהול מקרה',feedback:'משוב טוב',contribution:'התפתחות',challenges:'אתגרים',selfLearn:'למידה',goals:'יעדים'}],
+    id:'preview',name:'תלמיד לדוגמה',year:previewYear,gender:previewGender,
+    email:'preview@test.com',
+    practical:[{id:'1',num:'1',date:'2025-01-10',open:'פגישה ראשונה',topics:'היכרות',position:'חיובי',focus:'קשר',insights:'תובנות',challenge:'אמון',lessons:'לקחים'}],
+    supervision:[{id:'1',date:'2025-01-15',inst:'מנחה',topics:'ניהול מקרה',feedback:'טוב',contribution:'התפתחות',challenges:'אתגרים',selfLearn:'למידה',goals:'יעדים'}],
     cases:[],impact:[],proficiency:[],finalProject:null,yearHistory:[]
   };
   const req=gReq(previewUser.gender,previewUser.year,reqOv);
 
-  useEffect(()=>{
-    document.body.className='theme-'+editTh;
-  },[editTh]);
+  useEffect(()=>{ document.body.className='theme-'+editTh; },[editTh]);
   useEffect(()=>{
     document.body.style.fontFamily=`'${bodyFont}',sans-serif`;
-    document.querySelectorAll('h1,h2,h3,h4,h5,h6').forEach(el=>el.style.fontFamily=`'${headingFont}',sans-serif`);
+    document.querySelectorAll('h1,h2,h3,h4').forEach(el=>el.style.fontFamily=`'${headingFont}',sans-serif`);
   },[bodyFont,headingFont]);
 
-  // Click handler — only active in edit mode
-  // ── DRAG TOOL HANDLERS ──
+  // After each preview re-render, stamp saved styles onto DOM elements
+  useEffect(()=>{
+    const apply=()=>{
+      Object.entries(fields).forEach(([k,f])=>{
+        document.querySelectorAll(`[data-ve-key="${k}"]`).forEach(el=>{
+          if(f.color) el.style.color=f.color;
+          if(f.fontSize) el.style.fontSize=f.fontSize+'px';
+          if(f.fontFamily) el.style.fontFamily=f.fontFamily;
+          // don't overwrite text on a currently-focused CE element
+          if(f.text!=null && el.contentEditable!=='true') el.innerText=f.text;
+        });
+      });
+    };
+    apply();
+    const t=setTimeout(apply,400);
+    return()=>clearTimeout(t);
+  },[previewView,previewGender,previewYear,fields]);
+
+  // Drag handlers (unchanged)
   const handleDragMouseDown=e=>{
     if(!dragMode) return;
-    const el=e.target;
-    if(!el.innerText?.trim()) return;
+    if(!e.target.innerText?.trim()) return;
     e.preventDefault(); e.stopPropagation();
-    const cur=el.style.transform||'';
+    const cur=e.target.style.transform||'';
     const parts=cur.replace('translate(','').replace(')','').split(',');
     const tx=parts.length===2?parseFloat(parts[0]):0;
     const ty=parts.length===2?parseFloat(parts[1]):0;
-    draggingEl.current=el;
+    draggingEl.current=e.target;
     dragOffset.current={startX:e.clientX,startY:e.clientY,tx,ty};
-    el.style.outline='2px dashed #f59e0b';
-    el.style.outlineOffset='2px';
-    el.style.cursor='grabbing';
-    el.style.userSelect='none';
-    el.style.zIndex='9999';
-    setStatus('גורר...');
+    e.target.style.outline='2px dashed #f59e0b';
+    e.target.style.cursor='grabbing';
+    e.target.style.zIndex='9999';
   };
   const handleDragMouseMove=useCallback(e=>{
     if(!dragMode||!draggingEl.current) return;
     const {startX,startY,tx,ty}=dragOffset.current;
-    const dx=e.clientX-startX;
-    const dy=e.clientY-startY;
-    draggingEl.current.style.transform='translate('+(tx+dx)+'px,'+(ty+dy)+'px)';
+    draggingEl.current.style.transform='translate('+(tx+e.clientX-startX)+'px,'+(ty+e.clientY-startY)+'px)';
   },[dragMode]);
   const handleDragMouseUp=useCallback(()=>{
     if(!draggingEl.current) return;
     draggingEl.current.style.cursor='grab';
     draggingEl.current.style.outline='2px solid #f59e0b';
     draggingEl.current=null;
-    setStatus('הוזז');
   },[]);
-
   useEffect(()=>{
     if(dragMode){
       window.addEventListener('mousemove',handleDragMouseMove);
       window.addEventListener('mouseup',handleDragMouseUp);
-      return()=>{
-        window.removeEventListener('mousemove',handleDragMouseMove);
-        window.removeEventListener('mouseup',handleDragMouseUp);
-      };
+      return()=>{window.removeEventListener('mousemove',handleDragMouseMove);window.removeEventListener('mouseup',handleDragMouseUp);};
     }
   },[dragMode,handleDragMouseMove,handleDragMouseUp]);
 
-  // Single click in browse mode = nav
+  // Get or assign a stable ve-key to a DOM element
+  const getKey=el=>{
+    // prefer named field keys (title, subtitle, etc.)
+    if(el.dataset.veField) return el.dataset.veField;
+    if(!el.dataset.veKey){
+      keyCounter.current+=1;
+      el.dataset.veKey='vek'+keyCounter.current;
+    }
+    return el.dataset.veKey;
+  };
+
+  // Deselect: commit contentEditable text, restore element
+  const deselect=()=>{
+    const prev=document.querySelector('[data-ve-sel]');
+    if(prev){
+      if(prev.contentEditable==='true'){
+        const txt=(prev.innerText||'').trim();
+        const k=prev.dataset.veField||prev.dataset.veKey;
+        if(k&&txt) setFields(f=>({...f,[k]:{...(f[k]||{}),text:txt}}));
+        prev.contentEditable='false';
+        prev.style.background='';
+        prev.style.cursor='';
+      }
+      prev.removeAttribute('data-ve-sel');
+      prev.style.outline='';
+      prev.style.outlineOffset='';
+    }
+    setSelKey(null);
+    setStatus('מצב עריכה — לחץ על טקסט לעריכה');
+  };
+
+  // Click handler
   const handleClick=e=>{
     if(dragMode) return;
     if(browseMode){
       const btn=e.target.closest('button[data-view]');
-      if(btn){ setPreviewView(btn.dataset.view); }
+      if(btn) setPreviewView(btn.dataset.view);
+      return;
     }
-  };
-
-  // Double-click = enter text editing at cursor position
-  const handleDblClick=e=>{
-    if(dragMode||browseMode) return;
-    // Find nearest element with text content (leaf node)
-    let el=e.target;
-    while(el && el.children.length>0 && !el.dataset.veLeaf){
-      // Walk UP if the element has only one meaningful child
-      const textNodes=[...el.childNodes].filter(n=>n.nodeType===3&&n.textContent.trim());
-      if(textNodes.length>0) break;
-      // If no direct text, try the element itself
-      if((el.innerText||'').trim()) break;
-      el=el.parentElement;
-      if(!el||el===document.body) return;
-    }
-    if(!el||(el.innerText||'').trim().length===0) return;
-    if(['BUTTON','A','INPUT','SELECT','IMG','SVG'].includes(el.tagName)) return;
-    
-    // Deselect previous
-    const prev=document.querySelector('[data-ve-editing]');
-    if(prev&&prev!==el){
-      prev.removeAttribute('data-ve-editing');
-      prev.style.outline='';
-      prev.contentEditable='false';
-    }
-
-    // Make editable — browser handles cursor placement
-    el.setAttribute('data-ve-editing','1');
+    const el=e.target;
+    // if already editing this element, let browser handle cursor
+    if(el.contentEditable==='true') return;
+    if(['BUTTON','A','INPUT','SELECT','IMG','SVG','PATH'].includes(el.tagName)) return;
+    const txt=(el.innerText||'').trim();
+    if(!txt||txt.length>300) return;
+    e.stopPropagation();
+    deselect();
+    const k=getKey(el);
+    el.setAttribute('data-ve-sel','1');
     el.style.outline='2px solid #4a6fa5';
-    el.style.outlineOffset='1px';
+    el.style.outlineOffset='2px';
     el.contentEditable='true';
+    el.style.background='rgba(74,111,165,0.05)';
+    el.style.cursor='text';
     el.focus();
-    // Place cursor at click position (browser default after dblclick selects word)
-    // Clear the word selection so user can type freely
-    const sel=window.getSelection();
-    if(sel&&sel.rangeCount>0){
-      const range=sel.getRangeAt(0);
-      range.collapse(true); // collapse to start
-    }
-
+    try{const r=document.createRange();r.selectNodeContents(el);r.collapse(false);window.getSelection().removeAllRanges();window.getSelection().addRange(r);}catch(_){}
+    // load current saved values into panel
+    const saved=fields[k]||{};
     const cs=window.getComputedStyle(el);
-    setSelEl(el);
-    setSelText(el.innerText||'');
-    setSelColor(rgbToHex(cs.color));
-    setStatus('עורך — הקלד, גרור לסימון, Ctrl+Z לביטול');
+    setSelKey(k);
+    setStatus('עורך: "'+txt.substring(0,25)+'"');
   };
 
-  // Sync when user types directly in preview (contentEditable)
-  const handleInput=e=>{
-    const el=e.target.closest('[contenteditable="true"]')||document.querySelector('[data-ve-editing]');
-    if(!el) return;
-    const txt=el.innerText||'';
-    setSelText(txt);
-    // Store in domEdits ref (survives React re-renders)
-    if(el.dataset&&el.dataset.veField){
-      domEdits.current[el.dataset.veField]=txt;
-    }
-    // Also track by element ID for non-field elements
-    if(selEl){
-      domEdits.current['__lastText']=txt;
-    }
+  // Live sync panel selText while typing directly in element
+  useEffect(()=>{
+    const onInput=e=>{
+      const el=e.target;
+      if(el.contentEditable!=='true') return;
+      const k=el.dataset.veField||el.dataset.veKey;
+      if(!k) return;
+      const txt=(el.innerText||'').trim();
+      setFields(f=>({...f,[k]:{...(f[k]||{}),text:txt}}));
+    };
+    document.addEventListener('input',onInput,true);
+    return()=>document.removeEventListener('input',onInput,true);
+  },[]);
+
+  // Panel controls — operate on current selKey
+  const updateField=(key,styleKey,value,domFn)=>{
+    if(!key) return;
+    setFields(f=>({...f,[key]:{...(f[key]||{}),[styleKey]:value}}));
+    // also apply to DOM immediately
+    document.querySelectorAll(`[data-ve-key="${key}"],[data-ve-field="${key}"]`).forEach(el=>domFn(el));
   };
 
   const applyText=v=>{
-    setSelText(v);
-    const el=document.querySelector('[data-ve-editing]');
-    if(el){
-      el.innerText=v;
-      // If element has a data-ve-field, update editC directly
-      if(el.dataset&&el.dataset.veField){
-        setEditC(prev=>({...prev,[el.dataset.veField]:v}));
-      }
-    }
+    if(!selKey) return;
+    setFields(f=>({...f,[selKey]:{...(f[selKey]||{}),text:v}}));
+    document.querySelectorAll(`[data-ve-key="${selKey}"],[data-ve-field="${selKey}"]`).forEach(el=>{ if(el.contentEditable!=='true') el.innerText=v; else{ /* user is typing, don't fight */ } });
   };
-  const applyColor=v=>{
-    setSelColor(v);
-    const el=document.querySelector('[data-ve-editing]');
-    if(el) el.style.color=v;
-    // Store color change in domEdits if element has field tag
-    if(el&&el.dataset&&el.dataset.veField){
-      domEdits.current[el.dataset.veField+'_color']=v;
-    }
+  const applyColor=v=>updateField(selKey,'color',v,el=>el.style.color=v);
+  const applyFont=(f,el)=>{
+    if(el){ el.style.fontFamily=`'${f}',sans-serif`; }
+    if(selKey) setFields(fs=>({...fs,[selKey]:{...(fs[selKey]||{}),fontFamily:f}}));
+  };
+  const applySize=delta=>{
+    const el=document.querySelector('[data-ve-sel]');
+    if(!el||!selKey) return;
+    const s=parseFloat(window.getComputedStyle(el).fontSize)||16;
+    const ns=Math.max(8,Math.round(s+delta));
+    updateField(selKey,'fontSize',ns,e=>e.style.fontSize=ns+'px');
   };
 
   const toggleMode=()=>{
-    if(!browseMode){
-      const el=document.querySelector('[data-ve-editing]');
-      if(el){el.removeAttribute('data-ve-editing');el.style.outline='';el.contentEditable='inherit';}
-      setSelEl(null);
-    }
-    setBrowseMode(!browseMode);
-    setStatus(!browseMode ? 'מצב ניווט — לחץ על כפתורי התפריט לניווט' : 'לחץ פעמיים על טקסט לעריכה • גרור לסימון');
+    deselect();
+    setBrowseMode(b=>!b);
+    setStatus(!browseMode?'מצב ניווט':'מצב עריכה — לחץ על טקסט לעריכה ישירה');
   };
 
-  const isFem=previewUser.gender==='female';
-  const yr=parseInt(previewUser.year);
+  // SAVE — pure plain objects only
+  const handleSave=()=>{
+    // commit any open editor
+    deselect();
+    // build clean plain-object copy (no DOM refs, no class instances)
+    const cleanFields={};
+    Object.entries(fields).forEach(([k,v])=>{
+      const c={};
+      if(typeof v.text==='string') c.text=v.text;
+      if(typeof v.color==='string') c.color=v.color;
+      if(typeof v.fontSize==='number') c.fontSize=v.fontSize;
+      if(typeof v.fontFamily==='string') c.fontFamily=v.fontFamily;
+      if(Object.keys(c).length) cleanFields[k]=c;
+    });
+    // build content — named fields promoted to top level + veFields for re-hydration
+    const namedOverrides={};
+    Object.entries(cleanFields).forEach(([k,v])=>{ if(v.text!=null) namedOverrides[k]=v.text; });
+    const toSave={
+      bodyFont, headingFont,
+      title: namedOverrides.title || editC.title || '',
+      subtitle: namedOverrides.subtitle || editC.subtitle || '',
+      welcomeTitle: namedOverrides.welcomeTitle || editC.welcomeTitle || '',
+      welcomeSub: namedOverrides.welcomeSub || editC.welcomeSub || '',
+      veFields: cleanFields,
+    };
+    db.collection('settings').doc('siteContent').set({content:toSave, reqOv:editR},{merge:true})
+      .then(()=>{
+        db.collection('settings').doc('general').set({theme:editTh},{merge:true});
+        setEditC({...editC,...toSave});
+        onSave({...editC,...toSave});
+        console.log('VE saved:', JSON.stringify(toSave));
+      })
+      .catch(err=>alert('שגיאת שמירה: '+err.message));
+  };
+
+  const selFontSize=useMemo(()=>{
+    if(!selKey) return 16;
+    if(fields[selKey]?.fontSize) return fields[selKey].fontSize;
+    const el=document.querySelector('[data-ve-sel]');
+    return el?Math.round(parseFloat(window.getComputedStyle(el).fontSize)||16):16;
+  },[selKey,fields]);
+
+  const selText=selKey?(fields[selKey]?.text||''):'';
+  const selColor=selKey?(fields[selKey]?.color||'#333333'):'#333333';
+
   const navItems=[
     {id:'dashboard',l:'סקירה'},{id:'practical',l:'שעות התנסות'},
     {id:'supervision',l:'הדרכות אישיות'},{id:'case',l:'הצגת מקרה'},
@@ -1749,104 +1835,65 @@ function VisualEditor({onClose,editC,setEditC,editR,setR,getR,editTh,setEditTh,o
   ];
 
   return(
-    <div style={{position:'fixed',inset:0,zIndex:9999,display:'flex',flexDirection:'column'}}>
-      {/* TOP BAR */}
-      <div style={{background:'#1e1b4b',color:'white',padding:'8px 14px',display:'flex',alignItems:'center',gap:'9px',flexShrink:0,zIndex:10001,borderBottom:'1px solid rgba(255,255,255,.1)',flexWrap:'wrap'}}>
-        <span style={{fontWeight:800,fontSize:'.88rem',whiteSpace:'nowrap'}}>עורך ויזואלי</span>
+    <div style={{position:'fixed',inset:0,zIndex:9999,display:'flex',flexDirection:'column'}}
+      onKeyDown={e=>{ if(e.key==='Escape'){e.preventDefault();deselect();} }}>
 
-        <button onClick={toggleMode} style={{padding:'5px 14px',borderRadius:'20px',fontWeight:700,fontSize:'.82rem',cursor:'pointer',border:'2px solid',whiteSpace:'nowrap',
-          background:browseMode?'rgba(255,255,255,.15)':'#4a6fa5',borderColor:browseMode?'rgba(255,255,255,.3)':'#4a6fa5',color:'white'}}>
+      {/* TOP BAR */}
+      <div style={{background:'#1e1b4b',color:'white',padding:'8px 14px',display:'flex',alignItems:'center',gap:'8px',flexShrink:0,zIndex:10001,borderBottom:'1px solid rgba(255,255,255,.1)',flexWrap:'wrap'}}>
+        <span style={{fontWeight:800,fontSize:'.88rem',whiteSpace:'nowrap'}}>עורך ויזואלי</span>
+        <button onClick={toggleMode} style={{padding:'5px 12px',borderRadius:'20px',fontWeight:700,fontSize:'.82rem',cursor:'pointer',border:'2px solid',whiteSpace:'nowrap',background:browseMode?'rgba(255,255,255,.15)':'#4a6fa5',borderColor:browseMode?'rgba(255,255,255,.3)':'#4a6fa5',color:'white'}}>
           {browseMode?'🔍 ניווט':'✏️ עריכה'}
         </button>
-
-        <button onClick={()=>{setDragMode(!dragMode);if(!dragMode){setBrowseMode(false);setStatus('כלי הזזה — לחץ וגרור');}else setStatus('');}}
-          style={{padding:'5px 13px',borderRadius:'20px',fontWeight:700,fontSize:'.82rem',cursor:'pointer',border:'2px solid',whiteSpace:'nowrap',
-            background:dragMode?'#f59e0b':'rgba(255,255,255,.12)',borderColor:dragMode?'#f59e0b':'rgba(255,255,255,.25)',color:dragMode?'#1e1b4b':'white'}}>
+        <button onClick={()=>{setDragMode(d=>!d);if(!dragMode)setBrowseMode(false);}}
+          style={{padding:'5px 11px',borderRadius:'20px',fontWeight:700,fontSize:'.82rem',cursor:'pointer',border:'2px solid',whiteSpace:'nowrap',background:dragMode?'#f59e0b':'rgba(255,255,255,.12)',borderColor:dragMode?'#f59e0b':'rgba(255,255,255,.25)',color:dragMode?'#1e1b4b':'white'}}>
           ✥ הזזה
         </button>
-
-        <div style={{display:'flex',borderRadius:'20px',overflow:'hidden',border:'1px solid rgba(255,255,255,.25)',flexShrink:0}}>
+        <div style={{display:'flex',borderRadius:'20px',overflow:'hidden',border:'1px solid rgba(255,255,255,.25)'}}>
           {[['female','נקבה'],['male','זכר']].map(([g,l])=>(
-            <button key={g} onClick={()=>{setPreviewGender(g);if(g==='male'&&previewYear==='4')setPreviewYear('3');}} style={{padding:'4px 10px',border:'none',cursor:'pointer',fontSize:'.74rem',fontWeight:700,background:previewGender===g?'white':'transparent',color:previewGender===g?'#3d5a8a':'rgba(255,255,255,.75)'}}>{l}</button>
+            <button key={g} onClick={()=>{setPreviewGender(g);if(g==='male'&&previewYear==='4')setPreviewYear('3');}} style={{padding:'4px 9px',border:'none',cursor:'pointer',fontSize:'.73rem',fontWeight:700,background:previewGender===g?'white':'transparent',color:previewGender===g?'#3d5a8a':'rgba(255,255,255,.75)'}}>{l}</button>
           ))}
         </div>
-
-        <div style={{display:'flex',borderRadius:'20px',overflow:'hidden',border:'1px solid rgba(255,255,255,.25)',flexShrink:0}}>
-          {(previewGender==='male'?[['2',"ב'"],['3',"ג'"]]:([['2',"ב'"],['3',"ג'"],['4',"ד'"]])).map(([y,l])=>(
-            <button key={y} onClick={()=>setPreviewYear(y)} style={{padding:'4px 9px',border:'none',cursor:'pointer',fontSize:'.72rem',fontWeight:700,background:previewYear===y?'white':'transparent',color:previewYear===y?'#3d5a8a':'rgba(255,255,255,.75)'}}>{l}</button>
+        <div style={{display:'flex',borderRadius:'20px',overflow:'hidden',border:'1px solid rgba(255,255,255,.25)'}}>
+          {(previewGender==='male'?[['2',"ב'"],['3',"ג'"]]:[ ['2',"ב'"],['3',"ג'"],['4',"ד'"]]).map(([y,l])=>(
+            <button key={y} onClick={()=>setPreviewYear(y)} style={{padding:'4px 8px',border:'none',cursor:'pointer',fontSize:'.71rem',fontWeight:700,background:previewYear===y?'white':'transparent',color:previewYear===y?'#3d5a8a':'rgba(255,255,255,.75)'}}>{l}</button>
           ))}
         </div>
-
-        <div style={{display:'flex',gap:'4px'}}>
+        <div style={{display:'flex',gap:'3px'}}>
           {Object.entries(THEMES).map(([k,t])=>(
-            <button key={k} onClick={()=>setEditTh(k)} style={{padding:'3px 8px',borderRadius:'6px',fontSize:'.7rem',fontWeight:700,border:'none',cursor:'pointer',background:editTh===k?'white':'rgba(255,255,255,.12)',color:editTh===k?'#3d5a8a':'rgba(255,255,255,.75)'}}>
-              {t.label.split(' ')[0]}
-            </button>
+            <button key={k} onClick={()=>setEditTh(k)} style={{padding:'3px 7px',borderRadius:'6px',fontSize:'.69rem',fontWeight:700,border:'none',cursor:'pointer',background:editTh===k?'white':'rgba(255,255,255,.12)',color:editTh===k?'#3d5a8a':'rgba(255,255,255,.7)'}}>{t.label.split(' ')[0]}</button>
           ))}
         </div>
-
-        <span style={{flex:1,fontSize:'.72rem',color:'rgba(255,255,255,.45)',overflow:'hidden',whiteSpace:'nowrap',textOverflow:'ellipsis'}}>{status}</span>
-
-        <button onClick={()=>{
-          // Merge domEdits (user's direct DOM edits) into editC
-          // Build final data
-          const toSave={...editC,...domEdits.current};
-          delete toSave['__lastText'];
-          if(bodyFont) toSave.bodyFont=bodyFont;
-          if(headingFont) toSave.headingFont=headingFont;
-          document.querySelectorAll('[data-ve-field]').forEach(el=>{
-            const field=el.dataset.veField;
-            if(field&&el.innerText&&el.innerText.trim()) toSave[field]=el.innerText.trim();
-          });
-          setEditC(toSave);
-          // Save directly to Firebase — no prop chain, no race condition
-          const doSave=async()=>{
-            try{
-              // Ensure auth
-              if(!auth.currentUser) await auth.signInAnonymously();
-              await db.collection('settings').doc('siteContent').set({content:toSave,reqOv:editR},{merge:true});
-              await db.collection('settings').doc('general').set({theme:editTh},{merge:true});
-              onSave(toSave); // notify parent for UI feedback
-            }catch(err){
-              alert('שגיאת שמירה: '+err.message+'\n\nודא שחוקי Firebase מאפשרים כתיבה.');
-            }
-          };
-          doSave();
-        }} disabled={saving}
+        <span style={{flex:1,fontSize:'.71rem',color:'rgba(255,255,255,.4)',overflow:'hidden',whiteSpace:'nowrap',textOverflow:'ellipsis'}}>{status}</span>
+        <button onClick={handleSave} disabled={saving}
           style={{padding:'5px 13px',borderRadius:'7px',background:saved?'#10b981':'#4a6fa5',color:'white',fontWeight:700,border:'none',cursor:'pointer',fontSize:'.81rem'}}>
           {saving?'שומר...':saved?'נשמר ✓':'שמור'}
         </button>
-        <button onClick={onClose} style={{padding:'5px 10px',borderRadius:'7px',background:'rgba(239,68,68,.75)',color:'white',fontWeight:700,border:'none',cursor:'pointer'}}>סגור</button>
+        <button onClick={()=>{deselect();onClose();}} style={{padding:'5px 10px',borderRadius:'7px',background:'rgba(239,68,68,.75)',color:'white',fontWeight:700,border:'none',cursor:'pointer'}}>סגור</button>
       </div>
 
-      {/* PREVIEW — full width, floating edit popup */}
-      <div style={{flex:1,overflow:'auto',background:'var(--bg)',position:'relative',
-          cursor:dragMode?'grab':browseMode?'default':'text'}}
+      {/* PREVIEW */}
+      <div style={{flex:1,overflow:'auto',background:'var(--bg)',cursor:dragMode?'grab':browseMode?'default':'text'}}
         onClick={handleClick}
-        onDoubleClick={handleDblClick}
-        onInput={handleInput}
         onMouseDown={dragMode?handleDragMouseDown:undefined}>
 
         {!browseMode&&!dragMode&&(
-          <div style={{position:'sticky',top:0,zIndex:50,background:'rgba(74,111,165,.1)',borderBottom:'2px dashed rgba(74,111,165,.3)',padding:'5px 16px',fontSize:'.76rem',color:'var(--a1)',fontWeight:600,textAlign:'center'}}>
-            לחץ פעמיים על טקסט לעריכה • גרור לסימון טקסט
+          <div style={{position:'sticky',top:0,zIndex:50,background:'rgba(74,111,165,.1)',borderBottom:'2px dashed rgba(74,111,165,.3)',padding:'4px 16px',fontSize:'.75rem',color:'var(--a1)',fontWeight:600,textAlign:'center'}}>
+            לחץ על טקסט לעריכה ישירה — ESC לסיום
           </div>
         )}
 
-        {/* Fake header */}
-        <div className="app-hdr" style={{position:'sticky',top:!browseMode&&!dragMode?'29px':0,zIndex:40}}>
+        <div className="app-hdr" style={{position:'sticky',top:!browseMode&&!dragMode?'26px':0,zIndex:40}}>
           <div style={{maxWidth:'1400px',width:'100%',margin:'0 auto',padding:'10px 40px',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
             <div style={{display:'flex',alignItems:'center',gap:'18px'}}>
               <img src={`data:image/png;base64,${LOGO}`} className="logo-img" style={{height:'90px',width:'auto'}}/>
               <div style={{borderRight:'2px solid var(--brd)',paddingRight:'16px'}}>
-                <div data-ve-field="title" style={{fontWeight:800,fontSize:'1rem',color:'var(--txt)'}}>{editC.title||'מכללת תורת הנפש'}</div>
-                <div data-ve-field="subtitle" style={{fontSize:'.72rem',color:'var(--sub)'}}>{editC.subtitle||'יומן תלמיד-ה | מעקב הכשרה'}</div>
+                <div data-ve-field="title" data-ve-key="title" style={{fontWeight:800,fontSize:'1rem',color:'var(--txt)'}}>{mergedC.title||'מכללת תורת הנפש'}</div>
+                <div data-ve-field="subtitle" data-ve-key="subtitle" style={{fontSize:'.72rem',color:'var(--sub)'}}>{mergedC.subtitle||'יומן תלמיד-ה | מעקב הכשרה'}</div>
               </div>
             </div>
           </div>
         </div>
 
-        {/* Nav */}
         <div style={{background:'var(--bg)',borderBottom:'1px solid var(--brd)',padding:'8px 40px',position:'sticky',top:'110px',zIndex:39}}>
           <div style={{maxWidth:'1400px',margin:'0 auto',display:'flex',gap:'6px',flexWrap:'nowrap',overflowX:'auto'}}>
             {navItems.map(n=>(
@@ -1860,56 +1907,65 @@ function VisualEditor({onClose,editC,setEditC,editR,setR,getR,editTh,setEditTh,o
           </div>
         </div>
 
-        {/* Content */}
         <div style={{maxWidth:'1400px',width:'100%',margin:'0 auto',padding:'20px 40px',boxSizing:'border-box'}}>
-          {previewView==='dashboard'&&<Dashboard user={previewUser} setView={setPreviewView} req={req} siteC={editC}/>}
+          {previewView==='dashboard'&&<Dashboard user={previewUser} setView={setPreviewView} req={req} siteC={mergedC}/>}
           {previewView==='practical'&&<PracticalHours user={previewUser} updateUser={()=>{}} req={req}/>}
           {previewView==='supervision'&&<SupervisionHours user={previewUser} updateUser={()=>{}} req={req}/>}
           {previewView==='case'&&<CasePresentation user={previewUser} updateUser={()=>{}} req={req}/>}
           {previewView==='impact'&&<ImpactHours user={previewUser} updateUser={()=>{}} req={req}/>}
           {previewView==='contacts'&&<Contacts user={previewUser}/>}
         </div>
-        <Footer siteC={editC}/>
+        <Footer siteC={mergedC}/>
 
-        {/* FLOATING EDIT PANEL — appears when element selected, bottom-left corner */}
-        {selEl&&!browseMode&&(
-          <div style={{position:'fixed',bottom:'20px',left:'20px',zIndex:10000,
-            background:'white',borderRadius:'14px',padding:'14px',
-            boxShadow:'0 8px 32px rgba(0,0,0,.2)',border:'1px solid #e5e7eb',
-            minWidth:'220px',maxWidth:'280px'}}>
+        {/* FLOATING EDIT PANEL */}
+        {selKey&&!browseMode&&(
+          <div style={{position:'fixed',bottom:'20px',left:'20px',zIndex:10000,background:'white',borderRadius:'14px',padding:'14px',boxShadow:'0 8px 32px rgba(0,0,0,.2)',border:'1px solid #e5e7eb',minWidth:'220px',maxWidth:'270px'}}>
             <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'10px'}}>
               <span style={{fontSize:'.76rem',fontWeight:700,color:'#374151'}}>עריכת אלמנט</span>
-              <button onClick={()=>{const el=document.querySelector('[data-ve-editing]');if(el){el.removeAttribute('data-ve-editing');el.style.outline='';el.contentEditable='inherit';}setSelEl(null);}}
-                style={{background:'none',border:'none',cursor:'pointer',color:'#9ca3af',fontSize:'1rem',lineHeight:1}}>×</button>
+              <button onClick={deselect} style={{background:'none',border:'none',cursor:'pointer',color:'#9ca3af',fontSize:'1.1rem',lineHeight:1}}>×</button>
             </div>
             <div style={{display:'flex',flexDirection:'column',gap:'8px'}}>
               <div>
                 <label style={{display:'block',fontSize:'.72rem',fontWeight:700,color:'#6b7280',marginBottom:'3px'}}>טקסט</label>
-                <input value={selText} onChange={e=>{setSelText(e.target.value);applyText(e.target.value);}}
+                <input value={selText} onChange={e=>applyText(e.target.value)}
                   style={{width:'100%',padding:'6px 9px',border:'1.5px solid #e5e7eb',borderRadius:'7px',fontFamily:'Assistant,sans-serif',fontSize:'.85rem',boxSizing:'border-box'}}/>
               </div>
               <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'7px'}}>
                 <div>
                   <label style={{display:'block',fontSize:'.72rem',fontWeight:700,color:'#6b7280',marginBottom:'3px'}}>צבע</label>
-                  <input type="color" value={selColor&&selColor.startsWith('#')?selColor:'#333333'} onChange={e=>applyColor(e.target.value)}
+                  <input type="color" value={selColor.startsWith('#')?selColor:'#333333'} onChange={e=>applyColor(e.target.value)}
                     style={{width:'100%',height:'30px',borderRadius:'6px',border:'1.5px solid #e5e7eb',cursor:'pointer',padding:'2px'}}/>
                 </div>
                 <div>
                   <label style={{display:'block',fontSize:'.72rem',fontWeight:700,color:'#6b7280',marginBottom:'3px'}}>גודל</label>
                   <div style={{display:'flex',alignItems:'center',gap:'3px'}}>
-                    <button onClick={()=>{if(selEl){const s=parseFloat(window.getComputedStyle(selEl).fontSize)||16;selEl.style.fontSize=(s-1)+'px';}}}
-                      style={{flex:1,padding:'4px',borderRadius:'5px',background:'#f3f4f6',border:'1px solid #e5e7eb',cursor:'pointer',fontWeight:700}}>−</button>
-                    <span style={{fontSize:'.77rem',fontWeight:700,color:'#374151',minWidth:'26px',textAlign:'center'}}>
-                      {selEl?Math.round(parseFloat(window.getComputedStyle(selEl).fontSize)||16):16}
-                    </span>
-                    <button onClick={()=>{if(selEl){const s=parseFloat(window.getComputedStyle(selEl).fontSize)||16;selEl.style.fontSize=(s+1)+'px';}}}
-                      style={{flex:1,padding:'4px',borderRadius:'5px',background:'#f3f4f6',border:'1px solid #e5e7eb',cursor:'pointer',fontWeight:700}}>+</button>
+                    <button onClick={()=>applySize(-1)} style={{flex:1,padding:'4px',borderRadius:'5px',background:'#f3f4f6',border:'1px solid #e5e7eb',cursor:'pointer',fontWeight:700}}>−</button>
+                    <span style={{fontSize:'.77rem',fontWeight:700,color:'#374151',minWidth:'26px',textAlign:'center'}}>{selFontSize}</span>
+                    <button onClick={()=>applySize(1)} style={{flex:1,padding:'4px',borderRadius:'5px',background:'#f3f4f6',border:'1px solid #e5e7eb',cursor:'pointer',fontWeight:700}}>+</button>
                   </div>
                 </div>
               </div>
               <div>
                 <label style={{display:'block',fontSize:'.72rem',fontWeight:700,color:'#6b7280',marginBottom:'3px'}}>פונט</label>
-                <FontHoverPicker selEl={selEl} dark={false}/>
+                <FontHoverPicker selEl={document.querySelector('[data-ve-sel]')} dark={false} onApply={applyFont}/>
+              </div>
+            </div>
+            <div style={{marginTop:'10px',paddingTop:'10px',borderTop:'1px solid #f3f4f6'}}>
+              <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'6px'}}>
+                <div>
+                  <label style={{display:'block',fontSize:'.7rem',fontWeight:700,color:'#6b7280',marginBottom:'2px'}}>גוף</label>
+                  <select value={bodyFont} onChange={e=>{setBodyFont(e.target.value);document.body.style.fontFamily=`'${e.target.value}',sans-serif`;}}
+                    style={{width:'100%',padding:'4px 6px',border:'1px solid #e5e7eb',borderRadius:'6px',fontSize:'.78rem'}}>
+                    {FONTS_LIST.map(f=><option key={f} value={f}>{f}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label style={{display:'block',fontSize:'.7rem',fontWeight:700,color:'#6b7280',marginBottom:'2px'}}>כותרות</label>
+                  <select value={headingFont} onChange={e=>{setHeadingFont(e.target.value);document.querySelectorAll('h1,h2,h3').forEach(el=>el.style.fontFamily=`'${e.target.value}',sans-serif`);}}
+                    style={{width:'100%',padding:'4px 6px',border:'1px solid #e5e7eb',borderRadius:'6px',fontSize:'.78rem'}}>
+                    {FONTS_LIST.map(f=><option key={f} value={f}>{f}</option>)}
+                  </select>
+                </div>
               </div>
             </div>
           </div>
@@ -1918,6 +1974,7 @@ function VisualEditor({onClose,editC,setEditC,editR,setR,getR,editTh,setEditTh,o
     </div>
   );
 }
+
 
 
 ReactDOM.render(<App/>,document.getElementById('root'));
