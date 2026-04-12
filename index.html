@@ -1062,14 +1062,9 @@ function AdminPanel({users,setUsers,adminPw,setAdminPw,teacherPw,setTeacherPw,si
     setSaving(true);
     try{
       const contentToSave=explicitC||editC;
-      if(explicitC){
-        // Called from VisualEditor which already wrote to Firebase — just sync state
-        setEditC(explicitC);
-        setSaved(true); setDirty(false); setTimeout(()=>setSaved(false),3000);
-        setSaving(false);
-        return;
-      }
+      if(explicitC) setEditC(explicitC);
       await saveSite(contentToSave,editR);
+      // Always save theme (even when called from VE)
       saveTheme(editTh);
       const genData={theme:editTh};
       if(editAdminPw!==adminPw){genData.adminPassword=editAdminPw;setAdminPw(editAdminPw);}
@@ -1848,28 +1843,8 @@ function VisualEditor({onClose,editC,setEditC,editR,setR,getR,editTh,setEditTh,o
       veFields:cleanFields,
     };
 
-    console.log('Saving to Firebase:', JSON.stringify(toSave));
-
-    // Single write to Firebase — no double-write
-    // Also explicitly remove legacy elStyles field if it exists
-    db.collection('settings').doc('siteContent')
-      .set({content:toSave, reqOv:editR}, {merge:true})
-      .then(()=>{
-        // Verify: read back immediately
-        return db.collection('settings').doc('siteContent').get();
-      })
-      .then(doc=>{
-        const readBack=doc.data()&&doc.data().content;
-        console.log('Read-back from Firebase:', JSON.stringify(readBack));
-        // Sync local state
-        setEditC(prev=>({...prev,...toSave}));
-        // Tell parent to update siteC (so live site reflects changes without reload)
-        onSave(toSave);
-      })
-      .catch(err=>{
-        console.error('Firebase error:', err);
-        alert('שגיאת שמירה: '+err.message);
-      });
+    // onSave = saveAll in AdminPanel → calls saveSite → writes Firebase + updates siteC
+    onSave(toSave);
   };
 
   const selFontSize=selKey?(fieldsRef.current[selKey]?.fontSize||16):16;
