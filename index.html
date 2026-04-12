@@ -246,7 +246,9 @@ function App(){
       }).catch(console.error);
       db.collection('settings').doc('siteContent').get().then(d=>{
         if(d.exists){
-          const cont=d.data().content||{};
+          const raw=d.data().content||{};
+          // Strip legacy elStyles (caused Firestore errors) — keep only plain fields
+          const {elStyles:_dropped,...cont}=raw;
           setSiteC(cont); setReqOv(d.data().reqOv||{});
           if(cont.bodyFont) document.body.style.fontFamily=`'${cont.bodyFont}',sans-serif`;
           if(cont.headingFont){
@@ -1053,7 +1055,13 @@ function AdminPanel({users,setUsers,adminPw,setAdminPw,teacherPw,setTeacherPw,si
     setSaving(true);
     try{
       const contentToSave=explicitC||editC;
-      if(explicitC) setEditC(explicitC); // sync state when called from VE
+      if(explicitC){
+        // Called from VisualEditor which already wrote to Firebase — just sync state
+        setEditC(explicitC);
+        setSaved(true); setDirty(false); setTimeout(()=>setSaved(false),3000);
+        setSaving(false);
+        return;
+      }
       await saveSite(contentToSave,editR);
       saveTheme(editTh);
       const genData={theme:editTh};
@@ -1336,6 +1344,24 @@ function AdminPanel({users,setUsers,adminPw,setAdminPw,teacherPw,setTeacherPw,si
               <h2 style={{margin:'0 0 10px',fontSize:'.97rem',fontWeight:700}}>גיבוי נתונים</h2>
               <button onClick={()=>{const b=new Blob([JSON.stringify({users,adminPw,teacherPw},null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=`backup-${new Date().toISOString().split('T')[0]}.json`;a.click();}}
                 style={{padding:'10px 20px',borderRadius:'9px',background:'#059669',color:'white',fontWeight:700,border:'none',cursor:'pointer'}}>הורד גיבוי JSON</button>
+            </div>
+            <div style={{background:'white',borderRadius:'13px',padding:'20px'}}>
+              <h2 style={{margin:'0 0 6px',fontSize:'.97rem',fontWeight:700}}>תיקון חד-פעמי</h2>
+              <p style={{margin:'0 0 12px',fontSize:'.8rem',color:'#6b7280'}}>אם העורך הויזואלי לא שמר — לחץ כאן לניקוי נתוני עורך ישנים מ-Firebase</p>
+              <button onClick={async()=>{
+                try{
+                  await db.collection('settings').doc('siteContent').set({},{merge:true});
+                  const d=await db.collection('settings').doc('siteContent').get();
+                  if(d.exists){
+                    const raw=d.data().content||{};
+                    const {elStyles:_d,...clean}=raw;
+                    await db.collection('settings').doc('siteContent').set({content:clean,reqOv:d.data().reqOv||{}});
+                  }
+                  alert('בוצע! כעת שמור מהעורך הויזואלי מחדש.');
+                }catch(e){alert('שגיאה: '+e.message);}
+              }} style={{padding:'10px 20px',borderRadius:'9px',background:'#dc2626',color:'white',fontWeight:700,border:'none',cursor:'pointer'}}>
+                נקה elStyles ישנים מ-Firebase
+              </button>
             </div>
           </div>
         )}
@@ -1818,6 +1844,7 @@ function VisualEditor({onClose,editC,setEditC,editR,setR,getR,editTh,setEditTh,o
     console.log('Saving to Firebase:', JSON.stringify(toSave));
 
     // Single write to Firebase — no double-write
+    // Also explicitly remove legacy elStyles field if it exists
     db.collection('settings').doc('siteContent')
       .set({content:toSave, reqOv:editR}, {merge:true})
       .then(()=>{
