@@ -632,10 +632,10 @@ function MainApp({user,updateUser,view,setView,onLogout,onLogo,reqOv,siteC}){
               onMouseEnter={e=>e.currentTarget.style.transform='scale(1.04)'}
               onMouseLeave={e=>e.currentTarget.style.transform='scale(1)'}/>
             <div style={{borderRight:'2px solid var(--brd)',paddingRight:'18px'}}>
-              <div style={{fontWeight:800,fontSize:'1.1rem',color:'var(--txt)',letterSpacing:'-.01em'}}>
+              <div data-ve-key="title" style={{fontWeight:800,fontSize:'1.1rem',color:'var(--txt)',letterSpacing:'-.01em'}}>
                 {siteC.title||'מכללת תורת הנפש'}
               </div>
-              <div style={{fontSize:'0.72rem',color:'var(--sub)',marginTop:'2px'}}>
+              <div data-ve-key="subtitle" style={{fontSize:'0.72rem',color:'var(--sub)',marginTop:'2px'}}>
                 {siteC.subtitle||'יומן תלמיד-ה | מעקב הכשרה'}
               </div>
             </div>
@@ -706,10 +706,10 @@ function Dashboard({user,setView,req,siteC}){
         <div style={{position:'absolute',bottom:'-25px',left:'-25px',width:'130px',height:'130px',borderRadius:'50%',background:'rgba(255,255,255,0.07)'}}/>
         <div style={{position:'absolute',top:'-20px',right:'20%',width:'80px',height:'80px',borderRadius:'50%',background:'rgba(255,255,255,0.05)'}}/>
         <h2 style={{margin:'0 0 6px',fontSize:'1.7rem',fontWeight:800}}>
-          {(siteC.welcomeTitle||'שלום, {name}!').replace('{name}',user.name)}
+          <span data-ve-key="welcomeTitle">{(siteC.welcomeTitle||'שלום, {name}!').replace('{name}',user.name)}</span>
         </h2>
         <p style={{margin:'0 0 16px',opacity:.88,fontSize:'.93rem'}}>
-          {siteC.welcomeSub||'ברוכים הבאים ליומן ההכשרה'} — {yl}
+          <span data-ve-key="welcomeSub">{siteC.welcomeSub||'ברוכים הבאים ליומן ההכשרה'}</span> — {yl}
         </p>
         <div style={{display:'flex',gap:'8px',flexWrap:'wrap'}}>
           {cards.map(c=>{
@@ -997,30 +997,30 @@ function Footer({siteC}){
           {/* Brand */}
           <div>
             <img src={`data:image/png;base64,${LOGO}`} alt="לוגו" className="logo-img" style={{height:'70px',width:'auto',marginBottom:'12px'}}/>
-            <p style={{fontWeight:700,fontSize:'1rem',margin:'0 0 4px'}}>{siteC.title||'מכללת תורת הנפש'}</p>
-            <p style={{color:'#94a3b8',fontSize:'.8rem',margin:0}}>בדרך הבעל שם טוב</p>
+            <p data-ve-key="title" style={{fontWeight:700,fontSize:'1rem',margin:'0 0 4px'}}>{siteC.title||'מכללת תורת הנפש'}</p>
+            <p data-ve-key="footerTagline" style={{color:'#94a3b8',fontSize:'.8rem',margin:0}}>{siteC.footerTagline||'בדרך הבעל שם טוב'}</p>
           </div>
           {/* Contact */}
           <div>
-            <p style={{fontWeight:700,marginBottom:'12px',fontSize:'.9rem',color:'#cbd5e1'}}>יצירת קשר</p>
+            <p data-ve-key="footerContactTitle" style={{fontWeight:700,marginBottom:'12px',fontSize:'.9rem',color:'#cbd5e1'}}>{siteC.footerContactTitle||'יצירת קשר'}</p>
             <WaBtn href={`https://wa.me/${OFFICE_WA}`} label={`WhatsApp: ${OFFICE_TEL}`} sm/>
-            <p style={{color:'#64748b',fontSize:'.78rem',marginTop:'10px'}}>
-              ניתן לפנות למשרד בימים א'–ה' בשעות 9:00–17:00
+            <p data-ve-key="footerContactHours" style={{color:'#64748b',fontSize:'.78rem',marginTop:'10px'}}>
+              {siteC.footerContactHours||"ניתן לפנות למשרד בימים א'–ה' בשעות 9:00–17:00"}
             </p>
           </div>
           {/* Quick links */}
           <div>
-            <p style={{fontWeight:700,marginBottom:'12px',fontSize:'.9rem',color:'#cbd5e1'}}>קישורים מהירים</p>
+            <p data-ve-key="footerLinksTitle" style={{fontWeight:700,marginBottom:'12px',fontSize:'.9rem',color:'#cbd5e1'}}>{siteC.footerLinksTitle||'קישורים מהירים'}</p>
             <div style={{display:'flex',flexDirection:'column',gap:'6px'}}>
-              {['אודות המכללה','תכנית הלימודים','צוות המרצים'].map(l=>(
-                <span key={l} style={{color:'#94a3b8',fontSize:'.82rem',cursor:'default'}}>{l}</span>
+              {[['footerLink1','אודות המכללה'],['footerLink2','תכנית הלימודים'],['footerLink3','צוות המרצים']].map(([k,d])=>(
+                <span key={k} data-ve-key={k} style={{color:'#94a3b8',fontSize:'.82rem',cursor:'default'}}>{siteC[k]||d}</span>
               ))}
             </div>
           </div>
         </div>
         <div style={{borderTop:'1px solid #334155',paddingTop:'16px',display:'flex',justifyContent:'space-between',alignItems:'center',flexWrap:'wrap',gap:'8px'}}>
-          <p style={{color:'#64748b',fontSize:'.77rem',margin:0}}>© {new Date().getFullYear()} מכללת תורת הנפש — כל הזכויות שמורות</p>
-          <p style={{color:'#475569',fontSize:'.73rem',margin:0}}>יומן תלמיד-ה | מעקב הכשרה</p>
+          <p data-ve-key="footerCopyright" style={{color:'#64748b',fontSize:'.77rem',margin:0}}>{siteC.footerCopyright||`© ${new Date().getFullYear()} מכללת תורת הנפש — כל הזכויות שמורות`}</p>
+          <p data-ve-key="subtitle" style={{color:'#475569',fontSize:'.73rem',margin:0}}>{siteC.subtitle||'יומן תלמיד-ה | מעקב הכשרה'}</p>
         </div>
       </div>
     </footer>
@@ -1833,15 +1833,20 @@ function VisualEditor({onClose,editC,setEditC,editR,setR,getR,editTh,setEditTh,o
     });
 
     // Promote named text fields to top-level content fields
+    // Build toSave: start with existing editC named fields, then apply current changes
     const toSave={
       bodyFont:String(bodyFont||'Assistant'),
       headingFont:String(headingFont||'Heebo'),
-      title:String((cleanFields.title&&cleanFields.title.text)||editC.title||''),
-      subtitle:String((cleanFields.subtitle&&cleanFields.subtitle.text)||editC.subtitle||''),
-      welcomeTitle:String((cleanFields.welcomeTitle&&cleanFields.welcomeTitle.text)||editC.welcomeTitle||''),
-      welcomeSub:String((cleanFields.welcomeSub&&cleanFields.welcomeSub.text)||editC.welcomeSub||''),
       veFields:cleanFields,
     };
+    // Carry over any existing named fields from editC
+    ['title','subtitle','welcomeTitle','welcomeSub','footerTagline','footerContactTitle',
+     'footerContactHours','footerLinksTitle','footerLink1','footerLink2','footerLink3','footerCopyright'
+    ].forEach(k=>{if(editC[k]) toSave[k]=editC[k];});
+    // Promote current veFields text to top-level (overrides editC values)
+    Object.entries(cleanFields).forEach(([k,f])=>{
+      if(typeof f.text==='string'&&f.text) toSave[k]=f.text;
+    });
 
     // onSave = saveAll in AdminPanel → calls saveSite → writes Firebase + updates siteC
     onSave(toSave);
