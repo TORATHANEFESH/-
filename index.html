@@ -253,7 +253,7 @@ function App(){
           const promoted={...cont};
           if(cont.veFields){
             Object.entries(cont.veFields).forEach(([k,f])=>{
-              if(typeof f.text==='string'&&f.text) promoted[k]=f.text;
+              if(typeof f.text==='string') promoted[k]=f.text;
             });
           }
           setSiteC(promoted); setReqOv(d.data().reqOv||{});
@@ -261,6 +261,23 @@ function App(){
           if(promoted.headingFont){
             const applyHF=()=>document.querySelectorAll('h1,h2,h3,h4').forEach(el=>el.style.fontFamily=`'${promoted.headingFont}',sans-serif`);
             applyHF(); setTimeout(applyHF,500);
+          }
+          // Apply all veFields (including dynamic vek* keys) to DOM after render
+          if(cont.veFields&&Object.keys(cont.veFields).length){
+            const vf=cont.veFields;
+            const applyVF=()=>{
+              Object.entries(vf).forEach(([k,f])=>{
+                if(typeof f.text!=='string') return;
+                document.querySelectorAll(`[data-ve-key="${k}"]`).forEach(el=>{
+                  el.innerText=f.text;
+                  if(f.color) el.style.color=f.color;
+                  if(f.fontSize) el.style.fontSize=f.fontSize+'px';
+                  if(f.fontFamily) el.style.fontFamily=f.fontFamily;
+                });
+              });
+            };
+            setTimeout(applyVF,400);
+            setTimeout(applyVF,1200);
           }
         }
       }).catch(console.error);
@@ -1729,7 +1746,7 @@ function VisualEditor({onClose,editC,setEditC,editR,setR,getR,editTh,setEditTh,o
       const txt=(prev.innerText||'').trim();
       const k=prev.dataset.veKey;
       if(k){
-        // Write synchronously to ref so handleSave sees it immediately
+        // Write synchronously to ref — save even if empty string
         fieldsRef.current={...fieldsRef.current,[k]:{...(fieldsRef.current[k]||{}),text:txt}};
       }
       prev.contentEditable='false';
@@ -1759,6 +1776,7 @@ function VisualEditor({onClose,editC,setEditC,editR,setR,getR,editTh,setEditTh,o
     el.setAttribute('data-ve-sel','1');
     el.style.outline='2px solid #4a6fa5'; el.style.outlineOffset='2px';
     el.contentEditable='true'; el.style.background='rgba(74,111,165,0.05)'; el.style.cursor='text';
+    el.style.direction='rtl'; el.style.unicodeBidi='embed';
     el.focus();
     try{const r=document.createRange();r.selectNodeContents(el);r.collapse(false);window.getSelection().removeAllRanges();window.getSelection().addRange(r);}catch(_){}
     setSelKey(k);
@@ -1825,7 +1843,7 @@ function VisualEditor({onClose,editC,setEditC,editR,setR,getR,editTh,setEditTh,o
     Object.entries(currentFields).forEach(([k,v])=>{
       if(!v||typeof v!=='object') return;
       const c={};
-      if(typeof v.text==='string'&&v.text) c.text=v.text;
+      if(typeof v.text==='string') c.text=v.text;  // save even empty string
       if(typeof v.color==='string'&&v.color) c.color=v.color;
       if(typeof v.fontSize==='number') c.fontSize=v.fontSize;
       if(typeof v.fontFamily==='string'&&v.fontFamily) c.fontFamily=v.fontFamily;
@@ -1843,9 +1861,9 @@ function VisualEditor({onClose,editC,setEditC,editR,setR,getR,editTh,setEditTh,o
     ['title','subtitle','welcomeTitle','welcomeSub','footerTagline','footerContactTitle',
      'footerContactHours','footerLinksTitle','footerLink1','footerLink2','footerLink3','footerCopyright'
     ].forEach(k=>{if(editC[k]) toSave[k]=editC[k];});
-    // Promote current veFields text to top-level (overrides editC values)
+    // Promote current veFields text to top-level (overrides editC values, including empty)
     Object.entries(cleanFields).forEach(([k,f])=>{
-      if(typeof f.text==='string'&&f.text) toSave[k]=f.text;
+      if(typeof f.text==='string') toSave[k]=f.text;
     });
 
     // onSave = saveAll in AdminPanel → calls saveSite → writes Firebase + updates siteC
