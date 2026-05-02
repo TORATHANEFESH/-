@@ -1084,7 +1084,6 @@ function AdminPanel({users,setUsers,adminPw,setAdminPw,teacherPw,setTeacherPw,si
   const [editR,setEditR]=useState({...reqOv});
   // Keep editC in sync when siteC updates from Firebase
   useEffect(()=>{setEditC(prev=>({...siteC,...prev}));},[siteC]);
-  const [editTh,setEditTh]=useState(theme);
   const [editAdminPw,setEditAdminPw]=useState(adminPw);
   const [editTeacherPw,setEditTeacherPw]=useState(teacherPw);
   const [saving,setSaving]=useState(false);
@@ -1093,7 +1092,6 @@ function AdminPanel({users,setUsers,adminPw,setAdminPw,teacherPw,setTeacherPw,si
 
   const mark=()=>setDirty(true);
   const chR=v=>{setEditR(v);mark();};
-  const chTh=v=>{setEditTh(v);mark();};
 
   const getR=(g,y,f)=>((editR[g]||{})[y]||{})[f]??((DEF_REQ[g]||{})[parseInt(y)]||{})[f]??'';
   const setR=(g,y,f,v)=>{const u=JSON.parse(JSON.stringify(editR));if(!u[g])u[g]={};if(!u[g][y])u[g][y]={};u[g][y][f]=parseInt(v)||0;chR(u);};
@@ -1129,6 +1127,9 @@ function AdminPanel({users,setUsers,adminPw,setAdminPw,teacherPw,setTeacherPw,si
     ...(u.practical||[]).filter(p=>p.att).map(p=>({uid:u.id,uname:u.name,cat:'קובץ דיווח',...p.att}))
   ]).filter(Boolean);
 
+
+
+
   return(
     <div style={{minHeight:'100vh',background:'#0f0c29'}}>
       {/* Header */}
@@ -1147,7 +1148,7 @@ function AdminPanel({users,setUsers,adminPw,setAdminPw,teacherPw,setTeacherPw,si
               boxShadow:dirty?'0 0 10px rgba(251,191,36,.35)':'none'}}>
               {saving?'שומר...':saved?'נשמר! ✓':dirty?'שמור שינויים ●':'שמור שינויים'}
             </button>
-                        <button onClick={()=>{setIsAdmin(false);setView('dashboard');}} style={{padding:'8px 15px',borderRadius:'9px',background:'white',color:'#3d5a8a',fontWeight:700,border:'none',cursor:'pointer',fontSize:'.84rem'}}>יציאה</button>
+            <button onClick={()=>{setIsAdmin(false);setView('dashboard');}} style={{padding:'8px 15px',borderRadius:'9px',background:'white',color:'#3d5a8a',fontWeight:700,border:'none',cursor:'pointer',fontSize:'.84rem'}}>יציאה</button>
           </div>
         </div>
       </header>
