@@ -229,7 +229,9 @@ function App(){
     catch(e){return null;}
   });
   const [view,setView]=useState('dashboard');
+  const [adminPw,setAdminPw]=useState('1234');
   const [teacherPw,setTeacherPw]=useState('1234');
+  const [isAdmin,setIsAdmin]=useState(false);
   const [isTeacher,setIsTeacher]=useState(false);
   const [logoClicks,setLogoClicks]=useState([]);
   const [siteC,setSiteC]=useState({});
@@ -240,6 +242,7 @@ function App(){
     db.collection('settings').doc('general').get().then(d=>{
       if(d.exists){
         const v=d.data();
+        if(v.adminPassword) setAdminPw(v.adminPassword);
         if(v.teacherPassword) setTeacherPw(v.teacherPassword);
         if(v.theme){setTheme(v.theme);document.body.className='theme-'+v.theme;}
       }
@@ -281,13 +284,26 @@ function App(){
     const recent=logoClicks.filter(t=>now-t<1200);
     if(recent.length>=2){
       setLogoClicks([]);
-      const pw=prompt('סיסמת מחנך:');
-      if(pw===teacherPw){setIsTeacher(true);setView('teacher');}
-      else if(pw) alert('סיסמה שגויה');
+      const choice=prompt('בחר תפקיד:\n1 — מנהל\n2 — מחנך\n\nהזן מספר:');
+      if(choice==='1'){
+        const pw=prompt('סיסמת מנהל:');
+        if(pw===adminPw){setIsAdmin(true);setView('admin');}
+        else if(pw) alert('סיסמה שגויה');
+      } else if(choice==='2'){
+        const pw=prompt('סיסמת מחנך:');
+        if(pw===teacherPw){setIsTeacher(true);setView('teacher');}
+        else if(pw) alert('סיסמה שגויה');
+      }
     } else {
       setLogoClicks([...recent,now]);
     }
   };
+
+  if(isAdmin&&view==='admin')
+    return <AdminPanel users={users} setUsers={setUsers}
+      adminPw={adminPw} setAdminPw={setAdminPw}
+      teacherPw={teacherPw} setTeacherPw={setTeacherPw}
+      setIsAdmin={setIsAdmin} setView={setView}/>;
 
   if(isTeacher&&view==='teacher')
     return <TeacherPanel users={users} setIsTeacher={setIsTeacher} setView={setView}/>;
@@ -296,8 +312,173 @@ function App(){
     return <LoginPage users={users} setUsers={setUsers} setCur={setCur} onLogo={handleLogo}/>;
 
   return <MainApp user={cur} updateUser={updateUser} view={view} setView={setView}
-    onLogout={()=>{setCur(null);setView('login');setIsTeacher(false);try{localStorage.removeItem('cur_user');}catch(e){}}}
+    onLogout={()=>{setCur(null);setView('login');setIsAdmin(false);setIsTeacher(false);try{localStorage.removeItem('cur_user');}catch(e){}}}
     onLogo={handleLogo} reqOv={reqOv} siteC={siteC}/>;
+}
+
+// ══════════ ADMIN PANEL ══════════
+function AdminPanel({users,setUsers,adminPw,setAdminPw,teacherPw,setTeacherPw,setIsAdmin,setView}){
+  const [tab,setTab]=useState('students');
+  const [gf,setGf]=useState('');
+  const [yf,setYf]=useState('');
+  const [editAdminPw,setEditAdminPw]=useState(adminPw);
+  const [editTeacherPw,setEditTeacherPw]=useState(teacherPw);
+  const [saving,setSaving]=useState(false);
+  const [saved,setSaved]=useState(false);
+  const [dirty,setDirty]=useState(false);
+
+  useEffect(()=>{
+    db.collection('users').get().then(s=>{
+      const a=[];s.forEach(d=>a.push({id:d.id,...d.data()}));
+      if(a.length>0) setUsers(a);
+    }).catch(console.error);
+  },[]);
+
+  const upYear=(uid,yr)=>{
+    const u=users.find(x=>x.id===uid);if(!u)return;
+    const snap={year:u.year,at:new Date().toISOString()};
+    const hist=[...(u.yearHistory||[])];if(!hist.find(h=>h.year===u.year))hist.push(snap);
+    const upd=users.map(x=>x.id===uid?{...x,year:yr,yearHistory:hist}:x);setUsers(upd);
+    db.collection('users').doc(uid).update({year:yr,yearHistory:hist}).catch(console.error);
+    alert(`שנה עודכנה ל-${YL[yr]||yr}`);
+  };
+
+  const allFiles=users.flatMap(u=>[
+    ...(u.cases||[]).map(c=>({uid:u.id,uname:u.name,cat:'הצגת מקרה',...c})),
+    u.finalProject?{uid:u.id,uname:u.name,cat:'עבודה מסכמת',...u.finalProject}:null,
+    ...(u.practical||[]).filter(p=>p.att).map(p=>({uid:u.id,uname:u.name,cat:'קובץ דיווח',...p.att}))
+  ]).filter(Boolean);
+
+  const saveSettings=async()=>{
+    setSaving(true);
+    try{
+      const genData={};
+      if(editAdminPw!==adminPw){genData.adminPassword=editAdminPw;setAdminPw(editAdminPw);}
+      if(editTeacherPw!==teacherPw){genData.teacherPassword=editTeacherPw;setTeacherPw(editTeacherPw);}
+      if(Object.keys(genData).length>0)
+        await db.collection('settings').doc('general').set(genData,{merge:true});
+      setSaved(true);setDirty(false);setTimeout(()=>setSaved(false),3000);
+    }catch(e){alert('שגיאה בשמירה: '+e.message);}
+    setSaving(false);
+  };
+
+  return(
+    <div style={{minHeight:'100vh',background:'#f7f5fb'}}>
+      <header style={{background:'linear-gradient(135deg,#3d5a8a,#7b4fa6)',padding:'13px 28px',boxShadow:'0 2px 12px rgba(0,0,0,.2)'}}>
+        <div style={{maxWidth:'1200px',margin:'0 auto',display:'flex',justifyContent:'space-between',alignItems:'center',flexWrap:'wrap',gap:'9px'}}>
+          <div style={{color:'white'}}>
+            <h1 style={{margin:0,fontSize:'1.1rem',fontWeight:800}}>פאנל ניהול</h1>
+            <p style={{margin:0,fontSize:'.75rem',opacity:.8}}>מכללת תורת הנפש</p>
+          </div>
+          <div style={{display:'flex',gap:'8px',alignItems:'center'}}>
+            {tab==='settings'&&<button onClick={saveSettings} disabled={saving} style={{padding:'7px 16px',borderRadius:'9px',background:saved?'#10b981':dirty?'#f59e0b':'rgba(255,255,255,.18)',color:'white',fontWeight:700,border:'none',cursor:'pointer',fontSize:'.84rem'}}>{saving?'שומר...':saved?'נשמר ✓':dirty?'שמור ●':'שמור'}</button>}
+            <button onClick={()=>{setIsAdmin(false);setView('dashboard');}} style={{padding:'7px 15px',borderRadius:'9px',background:'white',color:'#3d5a8a',fontWeight:700,border:'none',cursor:'pointer',fontSize:'.84rem'}}>יציאה</button>
+          </div>
+        </div>
+      </header>
+
+      <div style={{maxWidth:'1200px',margin:'0 auto',padding:'18px 24px'}}>
+        <div style={{display:'flex',gap:'6px',marginBottom:'18px',flexWrap:'wrap'}}>
+          {[['students','תלמידים'],['files','קבצים'],['settings','הגדרות']].map(([k,l])=>(
+            <button key={k} onClick={()=>setTab(k)} style={{padding:'8px 18px',borderRadius:'9px',fontWeight:700,fontSize:'.84rem',cursor:'pointer',border:'none',background:tab===k?'#4a6fa5':'#e8e0f0',color:tab===k?'white':'#3d5a8a',transition:'all .15s'}}>{l}</button>
+          ))}
+        </div>
+
+        {tab==='students'&&(
+          <div style={{background:'white',borderRadius:'14px',overflow:'hidden',boxShadow:'0 2px 10px rgba(0,0,0,.06)'}}>
+            <div style={{padding:'14px 18px',borderBottom:'1px solid #e5e7eb',display:'flex',justifyContent:'space-between',alignItems:'center',flexWrap:'wrap',gap:'8px'}}>
+              <h2 style={{margin:0,fontSize:'.93rem',fontWeight:700}}>תלמידים ({users.filter(u=>(!gf||u.gender===gf)&&(!yf||u.year===yf)).length})</h2>
+              <div style={{display:'flex',gap:'5px',flexWrap:'wrap'}}>
+                {[['','הכל'],['female','נשים'],['male','גברים']].map(([g,l])=>(
+                  <button key={g} onClick={()=>setGf(g)} style={{padding:'3px 10px',borderRadius:'12px',fontSize:'.76rem',fontWeight:700,border:'1px solid #e5e7eb',cursor:'pointer',background:gf===g?'#4a6fa5':'white',color:gf===g?'white':'#6b7280'}}>{l}</button>
+                ))}
+                {(gf==='male'?[['','כל השנים'],['2',"ב'"],['3',"ג'"]]: [['','כל השנים'],['2',"ב'"],['3',"ג'"],['4',"ד'"]]).map(([y,l])=>(
+                  <button key={y} onClick={()=>setYf(y)} style={{padding:'3px 10px',borderRadius:'12px',fontSize:'.76rem',fontWeight:700,border:'1px solid #e5e7eb',cursor:'pointer',background:yf===y?'#4a6fa5':'white',color:yf===y?'white':'#6b7280'}}>{l}</button>
+                ))}
+              </div>
+            </div>
+            {!users.length?<p style={{textAlign:'center',color:'#9ca3af',padding:'36px'}}>טוען...</p>:(
+              <div style={{overflowX:'auto'}}>
+                <table style={{width:'100%',borderCollapse:'collapse',fontSize:'.85rem'}}>
+                  <thead><tr style={{background:'#f9fafb'}}>{['שם','שנה','מגדר','אימייל','התנסות','הדרכות','הצגות מקרה','שינוי שנה','פעולות'].map(h=><th key={h} style={{padding:'10px 13px',textAlign:'right',fontWeight:700,color:'#374151',whiteSpace:'nowrap'}}>{h}</th>)}</tr></thead>
+                  <tbody>{users.filter(u=>(!gf||u.gender===gf)&&(!yf||u.year===yf)).map((u,i)=>(
+                    <tr key={u.id} style={{background:i%2===0?'white':'#fafafa',borderTop:'1px solid #e5e7eb'}}>
+                      <td style={{padding:'10px 13px',fontWeight:600}}>{u.name}</td>
+                      <td style={{padding:'10px 13px'}}>{YL[u.year]||u.year}</td>
+                      <td style={{padding:'10px 13px'}}>{u.gender==='female'?'אשה':'איש'}</td>
+                      <td style={{padding:'10px 13px',color:'#6b7280',fontSize:'.79rem'}}>{u.email}</td>
+                      <td style={{padding:'10px 13px',fontWeight:600}}>{(u.practical||[]).length}</td>
+                      <td style={{padding:'10px 13px',fontWeight:600}}>{(u.supervision||[]).length}</td>
+                      <td style={{padding:'10px 13px',fontWeight:600}}>{(u.cases||[]).length}</td>
+                      <td style={{padding:'10px 13px'}}>
+                        <select value={u.year} onChange={e=>upYear(u.id,e.target.value)} style={{padding:'5px 8px',borderRadius:'7px',border:'1px solid #d1d5db',fontSize:'.81rem',fontFamily:'Assistant,sans-serif'}}>
+                          <option value="2">שנה ב'</option><option value="3">שנה ג'</option><option value="4">שנה ד'</option>
+                        </select>
+                      </td>
+                      <td style={{padding:'10px 13px'}}>
+                        <div style={{display:'flex',gap:'5px'}}>
+                          <button onClick={()=>{const n=prompt('שם חדש:',u.name);if(n&&n.trim()){const upd=users.map(x=>x.id===u.id?{...x,name:n.trim()}:x);setUsers(upd);db.collection('users').doc(u.id).update({name:n.trim()}).catch(console.error);}}}
+                            style={{padding:'4px 9px',borderRadius:'7px',background:'rgba(74,111,165,.1)',color:'#4a6fa5',fontWeight:700,border:'1px solid rgba(74,111,165,.2)',cursor:'pointer',fontSize:'.79rem'}}>ערוך</button>
+                          <button onClick={()=>{if(confirm(`למחוק את ${u.name}?`)){db.collection('users').doc(u.id).delete().then(()=>setUsers(users.filter(x=>x.id!==u.id))).catch(e=>alert('שגיאה: '+e.message));}}}
+                            style={{padding:'4px 9px',borderRadius:'7px',background:'rgba(239,68,68,.1)',color:'#ef4444',fontWeight:700,border:'1px solid rgba(239,68,68,.2)',cursor:'pointer',fontSize:'.79rem'}}>מחק</button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}</tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        )}
+
+        {tab==='files'&&(
+          <div style={{background:'white',borderRadius:'14px',padding:'20px',boxShadow:'0 2px 10px rgba(0,0,0,.06)'}}>
+            <h2 style={{margin:'0 0 16px',fontSize:'.97rem',fontWeight:700}}>קבצים שהועלו ({allFiles.length})</h2>
+            {!allFiles.length?<p style={{color:'#9ca3af',textAlign:'center',padding:'28px'}}>אין קבצים עדיין</p>:(
+              <div style={{display:'flex',flexDirection:'column',gap:'7px'}}>
+                {allFiles.map((f,i)=>(
+                  <div key={i} style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'11px 13px',borderRadius:'9px',background:'#f9fafb',border:'1px solid #e5e7eb',gap:'9px'}}>
+                    <div>
+                      <span style={{fontWeight:700,color:'#374151',fontSize:'.87rem'}}>{f.uname}</span>
+                      <span style={{margin:'0 7px',padding:'1px 7px',borderRadius:'12px',background:'rgba(74,111,165,.1)',color:'#4a6fa5',fontSize:'.73rem',fontWeight:600}}>{f.cat}</span>
+                      <span style={{fontSize:'.79rem',color:'#6b7280'}}>{f.name}</span>
+                      {f.at&&<span style={{display:'block',fontSize:'.71rem',color:'#9ca3af',marginTop:'1px'}}>{new Date(f.at).toLocaleDateString('he-IL')}</span>}
+                    </div>
+                    <a href={f.url} target="_blank" style={{padding:'5px 13px',borderRadius:'7px',background:'#4a6fa5',color:'white',fontSize:'.79rem',fontWeight:600,textDecoration:'none',whiteSpace:'nowrap'}}>פתח</a>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {tab==='settings'&&(
+          <div style={{display:'flex',flexDirection:'column',gap:'12px'}}>
+            <div style={{background:'white',borderRadius:'13px',padding:'20px',boxShadow:'0 2px 10px rgba(0,0,0,.06)'}}>
+              <h2 style={{margin:'0 0 13px',fontSize:'.97rem',fontWeight:700}}>סיסמאות כניסה</h2>
+              <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'14px'}}>
+                <div>
+                  <label style={{display:'block',fontSize:'.79rem',fontWeight:700,color:'#374151',marginBottom:'4px'}}>סיסמת מנהל</label>
+                  <input type="text" value={editAdminPw} onChange={e=>{setEditAdminPw(e.target.value);setDirty(true);}}
+                    style={{width:'100%',padding:'10px 13px',border:'2px solid #e5e7eb',borderRadius:'9px',fontFamily:'monospace',fontWeight:600}}/>
+                </div>
+                <div>
+                  <label style={{display:'block',fontSize:'.79rem',fontWeight:700,color:'#374151',marginBottom:'4px'}}>סיסמת מחנך</label>
+                  <input type="text" value={editTeacherPw} onChange={e=>{setEditTeacherPw(e.target.value);setDirty(true);}}
+                    style={{width:'100%',padding:'10px 13px',border:'2px solid #e5e7eb',borderRadius:'9px',fontFamily:'monospace',fontWeight:600}}/>
+                </div>
+              </div>
+            </div>
+            <div style={{background:'white',borderRadius:'13px',padding:'20px',boxShadow:'0 2px 10px rgba(0,0,0,.06)'}}>
+              <h2 style={{margin:'0 0 10px',fontSize:'.97rem',fontWeight:700}}>גיבוי נתונים</h2>
+              <button onClick={()=>{const b=new Blob([JSON.stringify({users,adminPw,teacherPw},null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=`backup-${new Date().toISOString().split('T')[0]}.json`;a.click();}}
+                style={{padding:'10px 20px',borderRadius:'9px',background:'#059669',color:'white',fontWeight:700,border:'none',cursor:'pointer'}}>הורד גיבוי JSON</button>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
 }
 
 // ══════════ TEACHER PANEL (read-only) ══════════
@@ -841,7 +1022,7 @@ function PracticalHours({user,updateUser,req}){
   const reset=()=>{setForm(ef);setShow(false);setEditIdx(null);};
   const save=e=>{e.preventDefault();const a=[...(user.practical||[])];if(editIdx!==null)a[editIdx]={...form,id:a[editIdx].id,att:a[editIdx].att};else a.push({...form,id:Date.now().toString()});updateUser({practical:a});reset();alert('הדיווח נשמר');};
   const [prog,setProg]=useState(null);
-  const attach=async(e,i)=>{const f=e.target.files[0];if(!f)return;if(!['application/pdf','application/msword','application/vnd.openxmlformats-officedocument.wordprocessingml.document'].includes(f.type)){alert('PDF או Word בלבד');return;}setUl(true);setProg(0);try{const r=await upFile(f,user.id,'practical',p=>setProg(p));const a=[...(user.practical||[])];a[i]={...a[i],att:r};updateUser({practical:a});alert('קובץ הועלה');}catch(e){alert('שגיאה: '+e.message);}setUl(false);setProg(null);e.target.value='';}; 
+  const attach=async(e,i)=>{const f=e.target.files[0];if(!f)return;const ext1=(f.name.split('.').pop()||'').toLowerCase();if(!['pdf','doc','docx'].includes(ext1)){alert('PDF או Word בלבד');return;}setUl(true);setProg(0);try{const r=await upFile(f,user.id,'practical',p=>setProg(p));const a=[...(user.practical||[])];a[i]={...a[i],att:r};updateUser({practical:a});alert('קובץ הועלה');}catch(e){console.error(e);alert('שגיאה בהעלאה: '+(e.message||e.code||String(e)));}setUl(false);setProg(null);e.target.value='';}; 
   const flds=[['open','כיצד התחילה הפגישה וכיצד הסתיימה?'],['topics','רצף הנושאים שעלו'],['position','עמדת הנועץ/ת ושינויים'],['focus','נקודות מיקוד ומה פעל הזזה'],['insights','תובנות והחלטות'],['challenge','קושי מרכזי ויעד הבא'],['lessons','לקחים אישיים']];
   return(<div>
     <SH title="שעות התנסות מעשית" sub="דיווח והתבוננות על תהליך הייעוץ" done={(user.practical||[]).length} total={req.p||0} color="#4a6fa5" onAdd={()=>setShow(!show)} adding={show}/>
@@ -904,7 +1085,7 @@ function SupervisionHours({user,updateUser,req}){
 
 function CasePresentation({user,updateUser,req}){
   const [ul,setUl]=useState(false);const cases=user.cases||[];const rn=req.c||1;
-  const upload=async e=>{const f=e.target.files[0];if(!f)return;if(!['application/pdf','application/msword','application/vnd.openxmlformats-officedocument.wordprocessingml.document'].includes(f.type)){alert('PDF או Word בלבד');return;}setUl(true);try{const r=await upFile(f,user.id,'cases');updateUser({cases:[...cases,{id:Date.now().toString(),...r}]});alert('הועלה');}catch(e){alert('שגיאה: '+e.message);}setUl(false);e.target.value='';};
+  const upload=async e=>{const f=e.target.files[0];if(!f)return;const ext2=(f.name.split('.').pop()||'').toLowerCase();if(!['pdf','doc','docx'].includes(ext2)){alert('PDF או Word בלבד');return;}setUl(true);try{const r=await upFile(f,user.id,'cases');updateUser({cases:[...cases,{id:Date.now().toString(),...r}]});alert('הועלה בהצלחה!');}catch(e){console.error(e);alert('שגיאה בהעלאה: '+(e.message||e.code||String(e)));}setUl(false);e.target.value='';};
   return(<div><SH title="הצגת מקרה" sub="העלאת קובץ PDF או Word" done={cases.length} total={rn} color="#8b5cf6" onAdd={()=>{}} adding={false}/>
     <div className="card" style={{padding:'22px'}}>{cases.length<rn&&<div style={{textAlign:'center',padding:'14px 0'}}><p style={{color:'var(--sub)',marginBottom:'12px',fontSize:'.88rem'}}>יש להעלות {rn} קובץ הצגת מקרה</p><UB onUpload={upload} uploading={ul}/><p style={{color:'var(--sub)',fontSize:'.72rem',marginTop:'5px'}}>מקסימום 25MB</p></div>}
     {cases.length>0&&<div style={{display:'flex',flexDirection:'column',gap:'7px',marginTop:cases.length<rn?'14px':0}}>{cases.map(c=>(
@@ -947,7 +1128,7 @@ function ProficiencyTests({user,updateUser,req}){
 
 function FinalProject({user,updateUser}){
   const [ul,setUl]=useState(false);const proj=user.finalProject;
-  const upload=async e=>{const f=e.target.files[0];if(!f)return;if(!['application/pdf','application/msword','application/vnd.openxmlformats-officedocument.wordprocessingml.document'].includes(f.type)){alert('PDF או Word בלבד');return;}setUl(true);try{const r=await upFile(f,user.id,'final');updateUser({finalProject:r});alert('העבודה הועלתה');}catch(e){alert('שגיאה: '+e.message);}setUl(false);e.target.value='';};
+  const upload=async e=>{const f=e.target.files[0];if(!f)return;const ext3=(f.name.split('.').pop()||'').toLowerCase();if(!['pdf','doc','docx'].includes(ext3)){alert('PDF או Word בלבד');return;}setUl(true);try{const r=await upFile(f,user.id,'final');updateUser({finalProject:r});alert('העבודה הועלתה!');}catch(e){console.error(e);alert('שגיאה בהעלאה: '+(e.message||e.code||String(e)));}setUl(false);e.target.value='';};
   return(<div><SH title="עבודה מסכמת" sub="העלאת קובץ PDF או Word" done={proj?1:0} total={1} color="#ef4444" onAdd={()=>{}} adding={false}/>
     <div className="card" style={{padding:'26px',textAlign:'center'}}>
       {!proj?<><p style={{color:'var(--sub)',marginBottom:'14px'}}>טרם הועלתה עבודה מסכמת</p><UB onUpload={upload} uploading={ul}/><p style={{color:'var(--sub)',fontSize:'.72rem',marginTop:'5px'}}>מקסימום 25MB</p></>
