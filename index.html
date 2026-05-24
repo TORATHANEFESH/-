@@ -104,6 +104,8 @@ input:focus,textarea:focus,select:focus{outline:none;border-color:var(--a1);box-
 
 /* Login background animation */
 @keyframes floatA{0%{transform:translateY(0)translateX(0)}33%{transform:translateY(-50px)translateX(-20px)}66%{transform:translateY(-15px)translateX(30px)}100%{transform:translateY(0)translateX(0)}}
+@keyframes fadeSlideUp{0%{opacity:0;transform:translateY(18px)}100%{opacity:1;transform:translateY(0)}}
+.teacher-welcome{animation:fadeSlideUp .4s ease both;}
 
 ::-webkit-scrollbar{width:5px;height:5px;}
 ::-webkit-scrollbar-thumb{background:rgba(74,111,165,.3);border-radius:999px;}
@@ -789,31 +791,42 @@ function TeacherPanel({users,setIsTeacher,setView}){
 
       <div style={{maxWidth:'1100px',width:'100%',margin:'0 auto',padding:'20px 24px',boxSizing:'border-box'}}>
         {!gender&&(
-          <div style={{display:'flex',gap:'20px',justifyContent:'center',marginTop:'40px',flexWrap:'wrap'}}>
-            {[['female','נשים','#8b5cf6'],['male','גברים','#3d5a8a']].map(([g,l,col])=>(
-              <button key={g} onClick={()=>{setGender(g);setYear(null);setSel(null);}}
-                style={{width:'190px',padding:'32px 16px',borderRadius:'14px',background:'white',border:`2px solid ${col}30`,cursor:'pointer',textAlign:'center',boxShadow:'0 3px 12px rgba(0,0,0,.07)',transition:'box-shadow .2s'}}
-                onMouseEnter={e=>e.currentTarget.style.boxShadow='0 6px 20px rgba(0,0,0,.11)'}
-                onMouseLeave={e=>e.currentTarget.style.boxShadow='0 3px 12px rgba(0,0,0,.07)'}>
-                <div style={{fontWeight:800,fontSize:'1.3rem',color:col,marginBottom:'8px'}}>{l}</div>
-                <div style={{fontSize:'.78rem',color:'#9ca3af'}}>{local.filter(x=>x.gender===g).length} תלמידים</div>
-              </button>
-            ))}
+          <div className="teacher-welcome" style={{maxWidth:'460px',margin:'48px auto 0',background:'white',borderRadius:'16px',padding:'32px',boxShadow:'0 4px 24px rgba(0,0,0,.07)',textAlign:'center'}}>
+            <p style={{margin:'0 0 6px',fontSize:'1rem',fontWeight:800,color:'#1e2a3a'}}>תצוגת מחנך</p>
+            <p style={{margin:'0 0 24px',fontSize:'.84rem',color:'#9ca3af'}}>בחר קבוצה להצגה</p>
+            <div style={{display:'flex',gap:'12px',justifyContent:'center'}}>
+              {[['female','נשים','#8b5cf6'],['male','גברים','#3d5a8a']].map(([g,l,col])=>(
+                <button key={g} onClick={()=>{setGender(g);setYear(null);setSel(null);}}
+                  style={{flex:1,padding:'14px 20px',borderRadius:'11px',background:`${col}10`,border:`2px solid ${col}30`,cursor:'pointer',transition:'all .18s'}}
+                  onMouseEnter={e=>{e.currentTarget.style.background=`${col}20`;e.currentTarget.style.borderColor=`${col}60`;}}
+                  onMouseLeave={e=>{e.currentTarget.style.background=`${col}10`;e.currentTarget.style.borderColor=`${col}30`;}}>
+                  <div style={{fontWeight:800,fontSize:'1.05rem',color:col}}>{l}</div>
+                  <div style={{fontSize:'.76rem',color:'#9ca3af',marginTop:'3px'}}>{local.filter(x=>x.gender===g).length} תלמידים</div>
+                </button>
+              ))}
+            </div>
+            <p style={{margin:'20px 0 0',fontSize:'.75rem',color:'#d1d5db'}}>{local.length} תלמידים בסה״כ</p>
           </div>
         )}
 
         {gender&&!year&&(
-          <div style={{display:'flex',gap:'14px',justifyContent:'center',marginTop:'32px',flexWrap:'wrap'}}>
+          <div className="teacher-welcome" style={{maxWidth:'460px',margin:'48px auto 0',background:'white',borderRadius:'16px',padding:'32px',boxShadow:'0 4px 24px rgba(0,0,0,.07)',textAlign:'center'}}>
+            <p style={{margin:'0 0 6px',fontSize:'1rem',fontWeight:800,color:'#1e2a3a'}}>{gender==='female'?'נשים':'גברים'}</p>
+            <p style={{margin:'0 0 24px',fontSize:'.84rem',color:'#9ca3af'}}>בחר שנה</p>
+            <div style={{display:'flex',gap:'10px',justifyContent:'center',flexWrap:'wrap'}}>
             {years.map(y=>(
               <button key={y} onClick={()=>{setYear(y);setSel(null);}}
-                style={{width:'170px',padding:'22px 14px',borderRadius:'12px',background:'white',border:'2px solid rgba(74,111,165,.15)',cursor:'pointer',textAlign:'center',boxShadow:'0 3px 10px rgba(0,0,0,.07)'}}>
-                <div style={{fontWeight:700,fontSize:'1rem',color:'#3d5a8a',marginBottom:'5px'}}>{YLoc[y]}</div>
+                style={{flex:1,minWidth:'110px',padding:'13px 12px',borderRadius:'11px',background:'rgba(74,111,165,.07)',border:'2px solid rgba(74,111,165,.15)',cursor:'pointer',textAlign:'center',transition:'all .18s'}}
+                onMouseEnter={e=>{e.currentTarget.style.background='rgba(74,111,165,.15)';e.currentTarget.style.borderColor='rgba(74,111,165,.35)';}}
+                onMouseLeave={e=>{e.currentTarget.style.background='rgba(74,111,165,.07)';e.currentTarget.style.borderColor='rgba(74,111,165,.15)';}}>
+                <div style={{fontWeight:700,fontSize:'.95rem',color:'#3d5a8a',marginBottom:'4px'}}>{YLoc[y]}</div>
                 <div style={{fontSize:'.78rem',color:'#9ca3af'}}>{local.filter(x=>x.gender===gender&&x.year===y).length} תלמידים</div>
                 {local.filter(x=>x.gender===gender&&x.year===y).some(x=>hasNew(x.id))&&(
                   <div style={{marginTop:'7px',display:'inline-block',padding:'1px 7px',borderRadius:'10px',background:'#fef2f2',color:'#ef4444',fontSize:'.71rem',fontWeight:700}}>● חדש</div>
                 )}
               </button>
             ))}
+            </div>
           </div>
         )}
 
