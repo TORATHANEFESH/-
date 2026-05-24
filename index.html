@@ -233,7 +233,7 @@ function App(){
   const [teacherPw,setTeacherPw]=useState('1234');
   const [isAdmin,setIsAdmin]=useState(false);
   const [isTeacher,setIsTeacher]=useState(false);
-  const [logoClicks,setLogoClicks]=useState([]);
+  const logoClicksRef=useRef([]);
   const [siteC,setSiteC]=useState({});
   const [reqOv,setReqOv]=useState({});
   const [theme,setTheme]=useState('default');
@@ -281,9 +281,9 @@ function App(){
 
   const handleLogo=()=>{
     const now=Date.now();
-    const recent=logoClicks.filter(t=>now-t<1200);
-    if(recent.length>=2){
-      setLogoClicks([]);
+    const recent=logoClicksRef.current.filter(t=>now-t<1200);
+    if(recent.length>=1){
+      logoClicksRef.current=[];
       const choice=prompt('בחר תפקיד:\n1 — מנהל\n2 — מחנך\n\nהזן מספר:');
       if(choice==='1'){
         const pw=prompt('סיסמת מנהל:');
@@ -295,7 +295,7 @@ function App(){
         else if(pw) alert('סיסמה שגויה');
       }
     } else {
-      setLogoClicks([...recent,now]);
+      logoClicksRef.current=[...recent,now];
     }
   };
 
@@ -481,6 +481,176 @@ function AdminPanel({users,setUsers,adminPw,setAdminPw,teacherPw,setTeacherPw,se
   );
 }
 
+// ══════════ TEACHER STUDENT DETAIL ══════════
+function TeacherStudentDetail({u,stuUploads,setUploads}){
+  const [tab,setTab]=useState('overview');
+  useEffect(()=>setTab('overview'),[u.id]);
+  const isFem=u.gender==='female';
+  const yr=parseInt(u.year);
+  const practFlds=[['open','כיצד התחילה הפגישה וכיצד הסתיימה?'],['topics','רצף הנושאים שעלו'],['position','עמדת הנועץ/ת ושינויים'],['focus','נקודות מיקוד ומה פעל הזזה'],['insights','תובנות והחלטות'],['challenge','קושי מרכזי ויעד הבא'],['lessons','לקחים אישיים']];
+  const supFlds=[['topics','נושאים שנדונו'],['feedback','משוב מהמדריך/ה'],['contribution','תרומה להתפתחותך'],['challenges','אתגרים שעלו'],['selfLearn','מה למדת על עצמך'],['goals','יעדים לפגישה הבאה'],['lessons','לקחים']];
+  const tabs=[
+    {id:'overview',l:'סקירה'},
+    {id:'practical',l:`התנסות (${(u.practical||[]).length})`},
+    {id:'supervision',l:`הדרכות (${(u.supervision||[]).length})`},
+    {id:'cases',l:`הצגות מקרה (${(u.cases||[]).length})`},
+    ...(isFem&&(yr===2||yr===3)?[{id:'impact',l:`משפיעות (${(u.impact||[]).length})`}]:[]),
+    ...(isFem&&yr===4?[{id:'proficiency',l:`בקיאות (${(u.proficiency||[]).length})`},{id:'final',l:'עבודה מסכמת'}]:[]),
+    {id:'files',l:`קבצים (${stuUploads.length})`},
+  ];
+  const FieldBlock=({label,value})=>value?(<div style={{marginBottom:'7px'}}><p style={{margin:'0 0 2px',fontSize:'.7rem',fontWeight:700,color:'#9ca3af',letterSpacing:'.3px'}}>{label}</p><p style={{margin:0,fontSize:'.85rem',color:'#374151',whiteSpace:'pre-line',lineHeight:'1.5'}}>{value}</p></div>):null;
+  const SectionCard=({header,color,bg,children})=>(<div style={{borderRadius:'10px',border:'1px solid #e5e7eb',marginBottom:'10px',overflow:'hidden'}}><div style={{background:bg,padding:'9px 14px',borderBottom:'1px solid #e5e7eb'}}>{header}</div><div style={{padding:'13px'}}>{children}</div></div>);
+  const EmptyMsg=({t})=>(<p style={{color:'#9ca3af',textAlign:'center',padding:'28px 0',fontSize:'.87rem'}}>{t}</p>);
+  return(
+    <div style={{background:'white',borderRadius:'12px',padding:'18px',boxShadow:'0 2px 8px rgba(0,0,0,.06)',overflowY:'auto',maxHeight:'calc(100vh - 140px)'}}>
+      <h2 style={{margin:'0 0 2px',fontSize:'1.05rem',fontWeight:800,color:'#1e2a3a'}}>{u.name}</h2>
+      <p style={{margin:'0 0 14px',fontSize:'.8rem',color:'#6b7280'}}>{u.email}</p>
+      <div style={{display:'flex',gap:'4px',flexWrap:'wrap',marginBottom:'14px',borderBottom:'2px solid #f3f4f6',paddingBottom:'10px'}}>
+        {tabs.map(t=>(
+          <button key={t.id} onClick={()=>setTab(t.id)} style={{padding:'5px 11px',borderRadius:'7px',fontWeight:600,border:'none',cursor:'pointer',fontSize:'.77rem',background:tab===t.id?'#4a6fa5':'#f3f4f6',color:tab===t.id?'white':'#6b7280',transition:'background .15s'}}>
+            {t.l}
+          </button>
+        ))}
+      </div>
+
+      {tab==='overview'&&(
+        <div>
+          <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(120px,1fr))',gap:'8px',marginBottom:'14px'}}>
+            {[['התנסות',(u.practical||[]).length,'#4a6fa5'],['הדרכות',(u.supervision||[]).length,'#10b981'],['הצגות מקרה',(u.cases||[]).length,'#8b5cf6'],
+              ...(isFem&&(yr===2||yr===3)?[['משפיעות',(u.impact||[]).length,'#06b6d4']]:[]),
+              ...(isFem&&yr===4?[['בקיאות',(u.proficiency||[]).length,'#f59e0b']]:[])
+            ].map(([l,n,col])=>(
+              <div key={l} style={{padding:'10px',borderRadius:'9px',background:col+'15',borderRight:`3px solid ${col}`,cursor:'pointer'}} onClick={()=>setTab(l==='התנסות'?'practical':l==='הדרכות'?'supervision':l==='הצגות מקרה'?'cases':l==='משפיעות'?'impact':'proficiency')}>
+                <p style={{margin:'0 0 2px',fontSize:'.7rem',color:'#6b7280',fontWeight:600}}>{l}</p>
+                <p style={{margin:0,fontSize:'1.4rem',fontWeight:800,color:col,lineHeight:1}}>{n}</p>
+              </div>
+            ))}
+          </div>
+          {u.finalProject&&(
+            <div style={{padding:'10px 13px',borderRadius:'9px',background:'rgba(16,185,129,.07)',border:'1px solid rgba(16,185,129,.2)',marginBottom:'10px',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+              <div><p style={{margin:'0 0 1px',fontWeight:700,color:'#059669',fontSize:'.85rem'}}>עבודה מסכמת הועלתה</p><p style={{margin:0,fontSize:'.76rem',color:'#6b7280'}}>{u.finalProject.name}</p></div>
+              <a href={u.finalProject.url} target="_blank" style={{padding:'5px 12px',borderRadius:'7px',background:'#059669',color:'white',fontSize:'.79rem',fontWeight:600,textDecoration:'none'}}>פתח</a>
+            </div>
+          )}
+          {stuUploads.filter(up=>!up.seen).length>0&&(
+            <div style={{padding:'8px 13px',borderRadius:'9px',background:'rgba(249,115,22,.07)',border:'1px solid rgba(249,115,22,.2)'}}>
+              <span style={{fontWeight:700,color:'#ea580c',fontSize:'.83rem'}}>● {stuUploads.filter(up=>!up.seen).length} קבצים חדשים שלא נצפו</span>
+            </div>
+          )}
+        </div>
+      )}
+
+      {tab==='practical'&&(
+        <div>
+          {!(u.practical||[]).length?<EmptyMsg t="טרם דווחו שעות התנסות"/>:
+          (u.practical||[]).map((r,i)=>(
+            <SectionCard key={r.id||i} bg="#eff6ff" header={
+              <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+                <span style={{fontWeight:700,fontSize:'.87rem',color:'#1e40af'}}>מפגש #{r.num}</span>
+                <span style={{fontSize:'.78rem',color:'#6b7280'}}>{r.date?new Date(r.date).toLocaleDateString('he-IL'):''}</span>
+              </div>
+            }>
+              {practFlds.map(([k,l])=><FieldBlock key={k} label={l} value={r[k]}/>)}
+              {r.att&&<div style={{marginTop:'6px',padding:'6px 10px',borderRadius:'7px',background:'rgba(16,185,129,.07)',border:'1px solid rgba(16,185,129,.2)'}}>
+                <a href={r.att.url} target="_blank" style={{color:'#059669',fontSize:'.81rem',fontWeight:600,textDecoration:'none'}}>📄 {r.att.name}</a>
+              </div>}
+            </SectionCard>
+          ))}
+        </div>
+      )}
+
+      {tab==='supervision'&&(
+        <div>
+          {!(u.supervision||[]).length?<EmptyMsg t="טרם דווחו הדרכות אישיות"/>:
+          (u.supervision||[]).map((r,i)=>(
+            <SectionCard key={r.id||i} bg="#f0fdf4" header={
+              <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+                <span style={{fontWeight:700,fontSize:'.87rem',color:'#166534'}}>הדרכה #{i+1}{r.inst?` — ${r.inst}`:''}</span>
+                <span style={{fontSize:'.78rem',color:'#6b7280'}}>{r.date?new Date(r.date).toLocaleDateString('he-IL'):''}</span>
+              </div>
+            }>
+              {supFlds.map(([k,l])=><FieldBlock key={k} label={l} value={r[k]}/>)}
+            </SectionCard>
+          ))}
+        </div>
+      )}
+
+      {tab==='cases'&&(
+        <div>
+          {!(u.cases||[]).length?<EmptyMsg t="טרם הועלו הצגות מקרה"/>:
+          (u.cases||[]).map((c,i)=>(
+            <div key={c.id||i} style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'11px 14px',borderRadius:'9px',background:'rgba(139,92,246,.05)',border:'1px solid rgba(139,92,246,.15)',marginBottom:'7px'}}>
+              <div><p style={{margin:'0 0 2px',fontWeight:600,fontSize:'.87rem',color:'#374151'}}>{c.name}</p><p style={{margin:0,fontSize:'.73rem',color:'#9ca3af'}}>{c.at?new Date(c.at).toLocaleDateString('he-IL'):''}</p></div>
+              <a href={c.url} target="_blank" style={{padding:'5px 12px',borderRadius:'7px',background:'#8b5cf6',color:'white',fontSize:'.79rem',fontWeight:600,textDecoration:'none',flexShrink:0}}>פתח</a>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {tab==='impact'&&(
+        <div>
+          {!(u.impact||[]).length?<EmptyMsg t="טרם דווחו שעות משפיעות"/>:
+          (u.impact||[]).map((h,i)=>(
+            <SectionCard key={h.id||i} bg="#ecfeff" header={
+              <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+                <span style={{fontWeight:700,fontSize:'.85rem',color:'#0e7490'}}>#{i+1} — {h.who}</span>
+                <span style={{fontSize:'.78rem',color:'#6b7280'}}>{h.date?new Date(h.date).toLocaleDateString('he-IL'):''}</span>
+              </div>
+            }>
+              <FieldBlock label="נושא" value={h.topic}/>
+              <FieldBlock label="מה קיבלתי" value={h.learning}/>
+            </SectionCard>
+          ))}
+        </div>
+      )}
+
+      {tab==='proficiency'&&(
+        <div>
+          {!(u.proficiency||[]).length?<EmptyMsg t="טרם נוספו מבחני בקיאות"/>:
+          (u.proficiency||[]).map((t,i)=>(
+            <div key={t.id||i} style={{padding:'11px 14px',borderRadius:'9px',border:'1px solid #fde68a',background:'#fffbeb',marginBottom:'7px',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+              <div>
+                <p style={{margin:'0 0 2px',fontWeight:700,fontSize:'.87rem',color:'#374151'}}>מבחן #{i+1} — {t.topic}</p>
+                <p style={{margin:0,fontSize:'.75rem',color:'#9ca3af'}}>{t.date?new Date(t.date).toLocaleDateString('he-IL'):''}</p>
+              </div>
+              {t.grade&&<span style={{padding:'3px 10px',borderRadius:'20px',background:'#f59e0b',color:'white',fontWeight:700,fontSize:'.83rem'}}>{t.grade}</span>}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {tab==='final'&&(
+        <div style={{padding:'10px 0'}}>
+          {!u.finalProject?<EmptyMsg t="טרם הועלתה עבודה מסכמת"/>:
+          <div style={{padding:'16px',borderRadius:'11px',background:'rgba(16,185,129,.07)',border:'1px solid rgba(16,185,129,.2)'}}>
+            <p style={{margin:'0 0 3px',fontWeight:700,color:'#059669',fontSize:'.9rem'}}>העבודה הועלתה</p>
+            <p style={{margin:'0 0 3px',fontSize:'.87rem',color:'#374151'}}>{u.finalProject.name}</p>
+            <p style={{margin:'0 0 12px',fontSize:'.75rem',color:'#9ca3af'}}>{u.finalProject.at?new Date(u.finalProject.at).toLocaleDateString('he-IL'):''}</p>
+            <a href={u.finalProject.url} target="_blank" style={{padding:'7px 16px',borderRadius:'9px',background:'#059669',color:'white',fontSize:'.84rem',fontWeight:600,textDecoration:'none'}}>פתח עבודה</a>
+          </div>}
+        </div>
+      )}
+
+      {tab==='files'&&(
+        <div>
+          {stuUploads.length===0?<EmptyMsg t="אין קבצים שהועלו"/>:
+          stuUploads.map((up,i)=>(
+            <div key={up.id||i} style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'9px 12px',borderRadius:'8px',marginBottom:'5px',background:up.seen?'#f9fafb':'rgba(249,115,22,.05)',border:`1px solid ${up.seen?'#e5e7eb':'rgba(249,115,22,.2)'}`}}>
+              <div>
+                <span style={{fontWeight:600,fontSize:'.83rem',color:'#374151'}}>{up.fileName||up.name}</span>
+                {!up.seen&&<span style={{marginRight:'6px',fontSize:'.69rem',color:'#f97316',fontWeight:700}}>● חדש</span>}
+                {up.uploadedAt&&<span style={{display:'block',fontSize:'.69rem',color:'#9ca3af'}}>{new Date(up.uploadedAt).toLocaleDateString('he-IL')}</span>}
+              </div>
+              <a href={up.url} target="_blank" onClick={()=>{if(!up.seen){db.collection('uploads').doc(up.id).update({seen:true}).catch(()=>{});setUploads(prev=>prev.map(x=>x.id===up.id?{...x,seen:true}:x));}}}
+                style={{padding:'4px 11px',borderRadius:'7px',background:'#4a6fa5',color:'white',fontSize:'.78rem',fontWeight:600,textDecoration:'none',whiteSpace:'nowrap',flexShrink:0}}>פתח</a>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ══════════ TEACHER PANEL (read-only) ══════════
 function TeacherPanel({users,setIsTeacher,setView}){
   const [gender,setGender]=useState(null);
@@ -579,42 +749,7 @@ function TeacherPanel({users,setIsTeacher,setView}){
             </div>
 
             {u?(
-              <div style={{background:'white',borderRadius:'12px',padding:'18px',boxShadow:'0 2px 8px rgba(0,0,0,.06)'}}>
-                <h2 style={{margin:'0 0 2px',fontSize:'1.05rem',fontWeight:800,color:'#1e2a3a'}}>{u.name}</h2>
-                <p style={{margin:'0 0 14px',fontSize:'.8rem',color:'#6b7280'}}>{u.email}</p>
-                <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(130px,1fr))',gap:'8px',marginBottom:'16px'}}>
-                  {[['התנסות',(u.practical||[]).length,'#4a6fa5'],['הדרכות',(u.supervision||[]).length,'#10b981'],['הצגות מקרה',(u.cases||[]).length,'#8b5cf6'],['משפיעות',(u.impact||[]).length,'#06b6d4'],['בקיאות',(u.proficiency||[]).length,'#f59e0b']].map(([l,n,col])=>(
-                    <div key={l} style={{padding:'10px',borderRadius:'9px',background:col+'10',borderRight:`3px solid ${col}`}}>
-                      <p style={{margin:'0 0 2px',fontSize:'.7rem',color:'#6b7280',fontWeight:600}}>{l}</p>
-                      <p style={{margin:0,fontSize:'1.4rem',fontWeight:800,color:col,lineHeight:1}}>{n}</p>
-                    </div>
-                  ))}
-                </div>
-                <h4 style={{margin:'0 0 8px',fontSize:'.86rem',fontWeight:700,color:'#374151'}}>
-                  קבצים שהועלו {stuUploads.filter(up=>!up.seen).length>0&&<span style={{padding:'1px 7px',borderRadius:'10px',background:'#f97316',color:'white',fontSize:'.69rem',fontWeight:700}}>{stuUploads.filter(up=>!up.seen).length} חדש</span>}
-                </h4>
-                {stuUploads.length===0&&<p style={{color:'#9ca3af',fontSize:'.8rem',marginBottom:'10px'}}>אין קבצים</p>}
-                {stuUploads.map((up,i)=>(
-                  <div key={up.id||i} style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'8px 11px',borderRadius:'8px',marginBottom:'4px',background:up.seen?'#f9fafb':'rgba(249,115,22,.05)',border:`1px solid ${up.seen?'#e5e7eb':'rgba(249,115,22,.2)'}`}}>
-                    <div>
-                      <span style={{fontWeight:600,fontSize:'.83rem',color:'#374151'}}>{up.fileName||up.name}</span>
-                      {!up.seen&&<span style={{margin:'0 6px',fontSize:'.69rem',color:'#f97316',fontWeight:700}}>● חדש</span>}
-                      {up.uploadedAt&&<span style={{display:'block',fontSize:'.69rem',color:'#9ca3af'}}>{new Date(up.uploadedAt).toLocaleDateString('he-IL')}</span>}
-                    </div>
-                    <a href={up.url} target="_blank"
-                      onClick={()=>{if(!up.seen){db.collection('uploads').doc(up.id).update({seen:true}).catch(()=>{});setUploads(prev=>prev.map(x=>x.id===up.id?{...x,seen:true}:x));}}}
-                      style={{padding:'4px 11px',borderRadius:'7px',background:'#4a6fa5',color:'white',fontSize:'.78rem',fontWeight:600,textDecoration:'none',whiteSpace:'nowrap'}}>פתח</a>
-                  </div>
-                ))}
-                {[[(u.cases||[]),'הצגות מקרה'],[u.finalProject?[u.finalProject]:[],'עבודה מסכמת'],[(u.practical||[]).filter(p=>p.att).map(p=>p.att),'קבצי דיווח']].filter(([f])=>f.length>0).map(([f,l])=>(
-                  <div key={l} style={{marginTop:'10px'}}>
-                    <h5 style={{margin:'0 0 5px',fontSize:'.8rem',fontWeight:700,color:'#374151'}}>{l}</h5>
-                    {f.map((fi,i)=>(
-                      <a key={i} href={fi.url} target="_blank" style={{display:'inline-flex',alignItems:'center',gap:'4px',padding:'4px 10px',borderRadius:'6px',background:'rgba(74,111,165,.1)',color:'#4a6fa5',fontSize:'.78rem',fontWeight:600,textDecoration:'none',marginLeft:'5px',marginBottom:'4px'}}>📄 {fi.name}</a>
-                    ))}
-                  </div>
-                ))}
-              </div>
+              <TeacherStudentDetail u={u} stuUploads={stuUploads} setUploads={setUploads}/>
             ):(
               <div style={{background:'white',borderRadius:'12px',padding:'36px',textAlign:'center',boxShadow:'0 2px 8px rgba(0,0,0,.06)'}}>
                 <p style={{color:'#9ca3af'}}>בחר תלמיד מהרשימה</p>
@@ -678,7 +813,7 @@ function LoginPage({users,setUsers,setCur,onLogo}){
         maxWidth:'420px',width:'100%',boxShadow:'0 20px 48px rgba(0,0,0,0.35)',
         position:'relative',zIndex:2}}>
         <div style={{textAlign:'center',marginBottom:'32px'}}>
-          <img src={`data:image/png;base64,${LOGO}`} alt="לוגו" className="logo-img" style={{maxWidth:'260px',height:'auto',cursor:'pointer'}} onClick={onLogo}/>
+          <img src={`data:image/png;base64,${LOGO}`} alt="לוגו" className="logo-img" style={{maxWidth:'260px',height:'auto',cursor:'pointer'}} onClick={onLogo} onDoubleClick={onLogo}/>
           <h1 style={{fontSize:'1.5rem',fontWeight:800,color:'#1a1a2e',margin:'14px 0 4px'}}>מכללת תורת הנפש</h1>
           <p style={{color:'#6b7280',fontSize:'0.85rem',margin:0}}>יומן תלמיד-ה | מעקב הכשרה</p>
         </div>
@@ -797,7 +932,7 @@ function MainApp({user,updateUser,view,setView,onLogout,onLogo,reqOv,siteC}){
           {/* Logo + title — spread full width left side */}
           <div style={{display:'flex',alignItems:'center',gap:'18px'}}>
             <img src={`data:image/png;base64,${LOGO}`} alt="לוגו" className="logo-img"
-              style={{height:'120px',width:'auto',cursor:'pointer'}} onClick={onLogo}/>
+              style={{height:'120px',width:'auto',cursor:'pointer'}} onClick={onLogo} onDoubleClick={onLogo}/>
             <div style={{borderRight:'2px solid var(--brd)',paddingRight:'18px'}}>
               <div style={{fontWeight:800,fontSize:'1.1rem',color:'var(--txt)',letterSpacing:'-.01em'}}>
                 {siteC.title||'מכללת תורת הנפש'}
