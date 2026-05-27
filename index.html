@@ -179,32 +179,81 @@ function gReq(g,y,ov){
   const o=(((ov||{})[g]||{})[parseInt(y)])||{};
   return{p:b.p,s:b.s,c:b.c,i:b.i,pr:b.pr,fp:b.fp,...o};
 }
+function dataURLtoBlob(dataURL){
+  const parts=dataURL.split(',');const mime=parts[0].match(/:(.*?);/)[1];
+  const b64=atob(parts[1]);const arr=new Uint8Array(b64.length);
+  for(let i=0;i<b64.length;i++)arr[i]=b64.charCodeAt(i);
+  return new Blob([arr],{type:mime});
+}
+async function openFileUrl(url){
+  if(url&&url.startsWith('#fsfile:')){
+    const fileId=url.substring(8);
+    try{
+      const doc=await db.collection('fileStore').doc(fileId).get();
+      if(!doc.exists){alert('הקובץ לא נמצא');return;}
+      const meta=doc.data();let base64='';
+      for(let i=0;i<meta.chunkCount;i++){
+        const chunk=await db.collection('fileStore').doc(fileId).collection('chunks').doc(String(i)).get();
+        if(chunk.exists)base64+=chunk.data().data;
+      }
+      const blob=dataURLtoBlob(base64);
+      const blobUrl=URL.createObjectURL(blob);
+      window.open(blobUrl,'_blank');
+    }catch(e){alert('שגיאה בפתיחת הקובץ: '+e.message);}
+  }else{window.open(url,'_blank');}
+}
+function upFileToFirestore(file,uid,cat,onProgress){
+  const MAX_CHUNK=700000;
+  return new Promise((resolve,reject)=>{
+    if(file.size>10*1024*1024){reject(new Error('הקובץ גדול מדי — מקסימום 10MB'));return;}
+    const reader=new FileReader();
+    reader.onload=async()=>{
+      try{
+        const base64=reader.result;const chunks=[];
+        for(let i=0;i<base64.length;i+=MAX_CHUNK)chunks.push(base64.substring(i,i+MAX_CHUNK));
+        if(onProgress)onProgress(10);
+        const docRef=await db.collection('fileStore').add({
+          name:file.name,uid,cat,size:file.size,type:file.type,
+          chunkCount:chunks.length,createdAt:new Date().toISOString()
+        });
+        for(let i=0;i<chunks.length;i++){
+          await db.collection('fileStore').doc(docRef.id).collection('chunks').doc(String(i)).set({data:chunks[i]});
+          if(onProgress)onProgress(10+Math.round(((i+1)/chunks.length)*85));
+        }
+        if(onProgress)onProgress(100);
+        const result={url:`#fsfile:${docRef.id}`,name:file.name,at:new Date().toISOString(),uid,cat};
+        try{await db.collection('uploads').add({studentId:uid,category:cat,fileName:file.name,url:result.url,uploadedAt:new Date().toISOString(),seen:false});}catch(e){}
+        resolve(result);
+      }catch(e){reject(new Error('שגיאה בשמירת הקובץ: '+e.message));}
+    };
+    reader.onerror=()=>reject(new Error('שגיאה בקריאת הקובץ'));
+    reader.readAsDataURL(file);
+  });
+}
 function upFile(file,uid,cat,onProgress){
   return new Promise((resolve,reject)=>{
-    const ref=storage.ref(`uploads/${uid}/${cat}/${Date.now()}_${file.name}`);
-    const task=ref.put(file);
-    task.on('state_changed',
-      snap=>{
-        if(onProgress){
-          const pct=Math.round((snap.bytesTransferred/snap.totalBytes)*100);
-          onProgress(pct);
-        }
-      },
-      err=>reject(err),
-      async()=>{
-        try{
-          const url=await task.snapshot.ref.getDownloadURL();
-          const result={url,name:file.name,at:new Date().toISOString(),uid,cat};
+    try{
+      const ref=storage.ref(`uploads/${uid}/${cat}/${Date.now()}_${file.name}`);
+      const task=ref.put(file);
+      task.on('state_changed',
+        snap=>{if(onProgress){const pct=Math.round((snap.bytesTransferred/snap.totalBytes)*100);onProgress(pct);}},
+        async err=>{
+          console.warn('Storage upload failed, using Firestore fallback:',err);
+          try{const r=await upFileToFirestore(file,uid,cat,onProgress);resolve(r);}
+          catch(e2){reject(e2);}
+        },
+        async()=>{
           try{
-            await db.collection('uploads').add({
-              studentId:uid,category:cat,fileName:file.name,
-              url,uploadedAt:new Date().toISOString(),seen:false
-            });
-          }catch(e){console.warn('notification save failed:',e);}
-          resolve(result);
-        }catch(e){reject(e);}
-      }
-    );
+            const url=await task.snapshot.ref.getDownloadURL();
+            const result={url,name:file.name,at:new Date().toISOString(),uid,cat};
+            try{await db.collection('uploads').add({studentId:uid,category:cat,fileName:file.name,url,uploadedAt:new Date().toISOString(),seen:false});}catch(e){console.warn('notification save failed:',e);}
+            resolve(result);
+          }catch(e){reject(e);}
+        }
+      );
+    }catch(e){
+      upFileToFirestore(file,uid,cat,onProgress).then(resolve).catch(reject);
+    }
   });
 }
 function WaBtn({href,label,sm}){
@@ -223,6 +272,12 @@ function WaBtn({href,label,sm}){
 }
 
 
+function getYouTubeId(url){
+  if(!url)return null;
+  const m=url.match(/(?:youtu\.be\/|youtube\.com\/(?:embed\/|v\/|watch\?v=|shorts\/))([^?&/#]+)/);
+  return m?m[1]:null;
+}
+
 // ══════════ APP ROOT ══════════
 function App(){
   const [users,setUsers]=useState([]);
@@ -231,6 +286,7 @@ function App(){
     catch(e){return null;}
   });
   const [view,setView]=useState('dashboard');
+  const [updates,setUpdates]=useState([]);
   const [adminPw,setAdminPw]=useState('1234');
   const [teacherPw,setTeacherPw]=useState('1234');
   const [isAdmin,setIsAdmin]=useState(false);
@@ -262,6 +318,9 @@ function App(){
     }).catch(console.error);
     db.collection('users').get().then(s=>{
       const a=[];s.forEach(d=>a.push({id:d.id,...d.data()}));setUsers(a);
+    }).catch(console.error);
+    db.collection('updates').orderBy('createdAt','desc').get().then(s=>{
+      const a=[];s.forEach(d=>a.push({id:d.id,...d.data()}));setUpdates(a);
     }).catch(console.error);
   },[]);
 
@@ -305,7 +364,8 @@ function App(){
     return <AdminPanel users={users} setUsers={setUsers}
       adminPw={adminPw} setAdminPw={setAdminPw}
       teacherPw={teacherPw} setTeacherPw={setTeacherPw}
-      setIsAdmin={setIsAdmin} setView={setView}/>;
+      setIsAdmin={setIsAdmin} setView={setView}
+      updates={updates} setUpdates={setUpdates}/>;
 
   if(isTeacher&&view==='teacher')
     return <TeacherPanel users={users} setIsTeacher={setIsTeacher} setView={setView}/>;
@@ -315,7 +375,8 @@ function App(){
 
   return <MainApp user={cur} updateUser={updateUser} view={view} setView={setView}
     onLogout={()=>{setCur(null);setView('login');setIsAdmin(false);setIsTeacher(false);try{localStorage.removeItem('cur_user');}catch(e){}}}
-    onLogo={handleLogo} reqOv={reqOv} siteC={siteC}/>;
+    onLogo={handleLogo} reqOv={reqOv} siteC={siteC}
+    updates={updates} setUpdates={setUpdates}/>;
 }
 
 // ══════════ ADMIN STUDENT DETAIL ══════════
@@ -359,7 +420,7 @@ function AdminStudentDetail({uid,users,setUsers,onClose}){
               <div><span style={{fontWeight:700,fontSize:'.87rem',color:'#1e40af'}}>מפגש #{r.num}</span><span style={{marginRight:'8px',fontSize:'.78rem',color:'#6b7280'}}>{r.date?new Date(r.date).toLocaleDateString('he-IL'):''}</span></div>
               <DelBtn onClick={()=>delItem('practical',i)}/>
             </div>
-            <div style={{padding:'12px'}}>{practFlds.map(([k,l])=><FB key={k} label={l} value={r[k]}/>)}{r.att&&<a href={r.att.url} target="_blank" style={{color:'#059669',fontSize:'.81rem',fontWeight:600,textDecoration:'none'}}>📄 {r.att.name}</a>}</div>
+            <div style={{padding:'12px'}}>{practFlds.map(([k,l])=><FB key={k} label={l} value={r[k]}/>)}{r.att&&<a href="#" onClick={e=>{e.preventDefault();openFileUrl(r.att.url);}} style={{color:'#059669',fontSize:'.81rem',fontWeight:600,textDecoration:'none',cursor:'pointer'}}>📄 {r.att.name}</a>}</div>
           </div>
         )))}
         {tab==='supervision'&&(!(u.supervision||[]).length?<Empty/>:(u.supervision||[]).map((r,i)=>(
@@ -374,7 +435,7 @@ function AdminStudentDetail({uid,users,setUsers,onClose}){
         {tab==='cases'&&(!(u.cases||[]).length?<Empty/>:(u.cases||[]).map((c,i)=>(
           <div key={c.id||i} style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'11px 14px',borderRadius:'9px',background:'rgba(139,92,246,.05)',border:'1px solid rgba(139,92,246,.15)',marginBottom:'7px'}}>
             <div><p style={{margin:'0 0 2px',fontWeight:600,fontSize:'.87rem',color:'#374151'}}>{c.name}</p><p style={{margin:0,fontSize:'.73rem',color:'#9ca3af'}}>{c.at?new Date(c.at).toLocaleDateString('he-IL'):''}</p></div>
-            <div style={{display:'flex',gap:'6px'}}><a href={c.url} target="_blank" style={{padding:'4px 10px',borderRadius:'7px',background:'#8b5cf6',color:'white',fontSize:'.78rem',fontWeight:600,textDecoration:'none'}}>פתח</a><DelBtn onClick={()=>delItem('cases',i)}/></div>
+            <div style={{display:'flex',gap:'6px'}}><a href="#" onClick={e=>{e.preventDefault();openFileUrl(c.url);}} style={{padding:'4px 10px',borderRadius:'7px',background:'#8b5cf6',color:'white',fontSize:'.78rem',fontWeight:600,textDecoration:'none',cursor:'pointer'}}>פתח</a><DelBtn onClick={()=>delItem('cases',i)}/></div>
           </div>
         )))}
         {tab==='impact'&&(!(u.impact||[]).length?<Empty/>:(u.impact||[]).map((h,i)=>(
@@ -395,7 +456,7 @@ function AdminStudentDetail({uid,users,setUsers,onClose}){
         {tab==='final'&&(!u.finalProject?<Empty t="לא הועלתה עבודה מסכמת"/>:
           <div style={{padding:'14px',borderRadius:'11px',background:'rgba(16,185,129,.07)',border:'1px solid rgba(16,185,129,.2)',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
             <div><p style={{margin:'0 0 2px',fontWeight:700,color:'#059669',fontSize:'.9rem'}}>{u.finalProject.name}</p><p style={{margin:0,fontSize:'.75rem',color:'#9ca3af'}}>{u.finalProject.at?new Date(u.finalProject.at).toLocaleDateString('he-IL'):''}</p></div>
-            <div style={{display:'flex',gap:'6px'}}><a href={u.finalProject.url} target="_blank" style={{padding:'5px 12px',borderRadius:'7px',background:'#059669',color:'white',fontSize:'.79rem',fontWeight:600,textDecoration:'none'}}>פתח</a><DelBtn onClick={()=>{if(confirm('למחוק עבודה מסכמת?'))upd({finalProject:null});}}/></div>
+            <div style={{display:'flex',gap:'6px'}}><a href="#" onClick={e=>{e.preventDefault();openFileUrl(u.finalProject.url);}} style={{padding:'5px 12px',borderRadius:'7px',background:'#059669',color:'white',fontSize:'.79rem',fontWeight:600,textDecoration:'none',cursor:'pointer'}}>פתח</a><DelBtn onClick={()=>{if(confirm('למחוק עבודה מסכמת?'))upd({finalProject:null});}}/></div>
           </div>
         )}
       </div>
@@ -404,7 +465,7 @@ function AdminStudentDetail({uid,users,setUsers,onClose}){
 }
 
 // ══════════ ADMIN PANEL ══════════
-function AdminPanel({users,setUsers,adminPw,setAdminPw,teacherPw,setTeacherPw,setIsAdmin,setView}){
+function AdminPanel({users,setUsers,adminPw,setAdminPw,teacherPw,setTeacherPw,setIsAdmin,setView,updates,setUpdates}){
   const [tab,setTab]=useState('students');
   const [selStu,setSelStu]=useState(null);
   const [gf,setGf]=useState('');
@@ -414,6 +475,27 @@ function AdminPanel({users,setUsers,adminPw,setAdminPw,teacherPw,setTeacherPw,se
   const [saving,setSaving]=useState(false);
   const [saved,setSaved]=useState(false);
   const [dirty,setDirty]=useState(false);
+  const [upForm,setUpForm]=useState({title:'',body:'',url:'',author:'הנהלה'});
+  const [addingUp,setAddingUp]=useState(false);
+  const [savingUp,setSavingUp]=useState(false);
+  const addUpdate=async()=>{
+    if(!upForm.title.trim()){alert('נא להזין כותרת');return;}
+    setSavingUp(true);
+    try{
+      const data={...upForm,createdAt:new Date().toISOString()};
+      const ref=await db.collection('updates').add(data);
+      setUpdates(prev=>[{id:ref.id,...data},...prev]);
+      setUpForm({title:'',body:'',url:'',author:'הנהלה'});
+      setAddingUp(false);
+      alert('העדכון פורסם!');
+    }catch(e){alert('שגיאה: '+e.message);}
+    setSavingUp(false);
+  };
+  const delUpdate=async id=>{
+    if(!confirm('למחוק עדכון זה?'))return;
+    try{await db.collection('updates').doc(id).delete();setUpdates(prev=>prev.filter(u=>u.id!==id));}
+    catch(e){alert('שגיאה: '+e.message);}
+  };
 
   useEffect(()=>{
     db.collection('users').get().then(s=>{
@@ -467,7 +549,7 @@ function AdminPanel({users,setUsers,adminPw,setAdminPw,teacherPw,setTeacherPw,se
 
       <div style={{maxWidth:'1200px',margin:'0 auto',padding:'18px 24px'}}>
         <div style={{display:'flex',gap:'6px',marginBottom:'18px',flexWrap:'wrap'}}>
-          {[['students','תלמידים'],['files','קבצים'],['settings','הגדרות']].map(([k,l])=>(
+          {[['students','תלמידים'],['files','קבצים'],['updates','עדכונים'],['settings','הגדרות']].map(([k,l])=>(
             <button key={k} onClick={()=>setTab(k)} style={{padding:'8px 18px',borderRadius:'9px',fontWeight:700,fontSize:'.84rem',cursor:'pointer',border:'none',background:tab===k?'#4a6fa5':'#e8e0f0',color:tab===k?'white':'#3d5a8a',transition:'all .15s'}}>{l}</button>
           ))}
         </div>
@@ -537,11 +619,56 @@ function AdminPanel({users,setUsers,adminPw,setAdminPw,teacherPw,setTeacherPw,se
                       <span style={{fontSize:'.79rem',color:'#6b7280'}}>{f.name}</span>
                       {f.at&&<span style={{display:'block',fontSize:'.71rem',color:'#9ca3af',marginTop:'1px'}}>{new Date(f.at).toLocaleDateString('he-IL')}</span>}
                     </div>
-                    <a href={f.url} target="_blank" style={{padding:'5px 13px',borderRadius:'7px',background:'#4a6fa5',color:'white',fontSize:'.79rem',fontWeight:600,textDecoration:'none',whiteSpace:'nowrap'}}>פתח</a>
+                    <a href="#" onClick={e=>{e.preventDefault();openFileUrl(f.url);}} style={{padding:'5px 13px',borderRadius:'7px',background:'#4a6fa5',color:'white',fontSize:'.79rem',fontWeight:600,textDecoration:'none',whiteSpace:'nowrap',cursor:'pointer'}}>פתח</a>
                   </div>
                 ))}
               </div>
             )}
+          </div>
+        )}
+
+        {tab==='updates'&&(
+          <div style={{background:'white',borderRadius:'14px',padding:'20px',boxShadow:'0 2px 10px rgba(0,0,0,.06)'}}>
+            <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'16px'}}>
+              <h2 style={{margin:0,fontSize:'.97rem',fontWeight:700}}>עדכונים ({updates.length})</h2>
+              <button onClick={()=>setAddingUp(!addingUp)} style={{padding:'7px 16px',borderRadius:'9px',background:addingUp?'#ef4444':'#4a6fa5',color:'white',fontWeight:700,border:'none',cursor:'pointer',fontSize:'.84rem'}}>{addingUp?'ביטול':'+ עדכון חדש'}</button>
+            </div>
+            {addingUp&&(
+              <div style={{padding:'18px',borderRadius:'11px',border:'2px solid #4a6fa5',marginBottom:'16px',background:'#f8faff'}}>
+                <h3 style={{margin:'0 0 12px',fontSize:'.9rem',fontWeight:700,color:'#1e2a3a'}}>פרסום עדכון חדש</h3>
+                <div style={{display:'flex',flexDirection:'column',gap:'10px'}}>
+                  <div><label style={{display:'block',fontSize:'.8rem',fontWeight:700,marginBottom:'4px'}}>כותרת *</label><input type="text" value={upForm.title} onChange={e=>setUpForm({...upForm,title:e.target.value})} placeholder="כותרת העדכון" style={{width:'100%',padding:'9px 12px',borderRadius:'9px',border:'2px solid #e5e7eb',fontSize:'.88rem'}}/></div>
+                  <div><label style={{display:'block',fontSize:'.8rem',fontWeight:700,marginBottom:'4px'}}>תוכן</label><textarea value={upForm.body} onChange={e=>setUpForm({...upForm,body:e.target.value})} rows={4} placeholder="תוכן העדכון..." style={{width:'100%',padding:'9px 12px',borderRadius:'9px',border:'2px solid #e5e7eb',fontSize:'.88rem',resize:'vertical'}}/></div>
+                  <div><label style={{display:'block',fontSize:'.8rem',fontWeight:700,marginBottom:'4px'}}>קישור / סרטון (אופציונלי)</label><input type="url" value={upForm.url} onChange={e=>setUpForm({...upForm,url:e.target.value})} placeholder="https://..." dir="ltr" style={{width:'100%',padding:'9px 12px',borderRadius:'9px',border:'2px solid #e5e7eb',fontSize:'.88rem'}}/><p style={{margin:'3px 0 0',fontSize:'.72rem',color:'#6b7280'}}>קישורי YouTube יציגו תצוגה מקדימה אוטומטית</p></div>
+                  <div><label style={{display:'block',fontSize:'.8rem',fontWeight:700,marginBottom:'4px'}}>פורסם ע"י</label><input type="text" value={upForm.author} onChange={e=>setUpForm({...upForm,author:e.target.value})} style={{width:'100%',padding:'9px 12px',borderRadius:'9px',border:'2px solid #e5e7eb',fontSize:'.88rem'}}/></div>
+                  {upForm.url&&getYouTubeId(upForm.url)&&(
+                    <div style={{borderRadius:'10px',overflow:'hidden',maxWidth:'320px'}}>
+                      <p style={{fontSize:'.78rem',fontWeight:600,color:'#059669',margin:'0 0 5px'}}>תצוגה מקדימה:</p>
+                      <img src={`https://img.youtube.com/vi/${getYouTubeId(upForm.url)}/hqdefault.jpg`} alt="preview" style={{width:'100%',borderRadius:'8px'}}/>
+                    </div>
+                  )}
+                  <button onClick={addUpdate} disabled={savingUp} style={{padding:'10px',borderRadius:'10px',background:'linear-gradient(135deg,#3d5a8a,#7b4fa6)',color:'white',fontWeight:700,border:'none',cursor:'pointer',fontSize:'.88rem',opacity:savingUp?.6:1}}>{savingUp?'מפרסם...':'פרסם עדכון'}</button>
+                </div>
+              </div>
+            )}
+            {updates.length===0?<p style={{color:'#9ca3af',textAlign:'center',padding:'28px'}}>אין עדכונים</p>:
+              <div style={{display:'flex',flexDirection:'column',gap:'9px'}}>
+                {updates.map(up=>(
+                  <div key={up.id} style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',padding:'13px 15px',borderRadius:'10px',background:'#f9fafb',border:'1px solid #e5e7eb'}}>
+                    <div style={{flex:1}}>
+                      <p style={{margin:'0 0 3px',fontWeight:700,fontSize:'.88rem',color:'#1e2a3a'}}>{up.title}</p>
+                      {up.body&&<p style={{margin:'0 0 3px',fontSize:'.82rem',color:'#6b7280',whiteSpace:'pre-line',maxHeight:'60px',overflow:'hidden'}}>{up.body}</p>}
+                      <div style={{display:'flex',gap:'10px',fontSize:'.73rem',color:'#9ca3af'}}>
+                        <span>{up.createdAt?new Date(up.createdAt).toLocaleDateString('he-IL'):''}</span>
+                        {up.author&&<span>ע"י {up.author}</span>}
+                        {up.url&&<span style={{color:'#4a6fa5'}}>+ קישור</span>}
+                      </div>
+                    </div>
+                    <button onClick={()=>delUpdate(up.id)} style={{padding:'4px 10px',borderRadius:'7px',background:'rgba(239,68,68,.1)',color:'#ef4444',fontWeight:700,border:'1px solid rgba(239,68,68,.2)',cursor:'pointer',fontSize:'.75rem',flexShrink:0,marginRight:'10px'}}>מחק</button>
+                  </div>
+                ))}
+              </div>
+            }
           </div>
         )}
 
@@ -620,7 +747,7 @@ function TeacherStudentDetail({u,stuUploads,setUploads}){
           {u.finalProject&&(
             <div style={{padding:'10px 13px',borderRadius:'9px',background:'rgba(16,185,129,.07)',border:'1px solid rgba(16,185,129,.2)',marginBottom:'10px',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
               <div><p style={{margin:'0 0 1px',fontWeight:700,color:'#059669',fontSize:'.85rem'}}>עבודה מסכמת הועלתה</p><p style={{margin:0,fontSize:'.76rem',color:'#6b7280'}}>{u.finalProject.name}</p></div>
-              <a href={u.finalProject.url} target="_blank" style={{padding:'5px 12px',borderRadius:'7px',background:'#059669',color:'white',fontSize:'.79rem',fontWeight:600,textDecoration:'none'}}>פתח</a>
+              <a href="#" onClick={e=>{e.preventDefault();openFileUrl(u.finalProject.url);}} style={{padding:'5px 12px',borderRadius:'7px',background:'#059669',color:'white',fontSize:'.79rem',fontWeight:600,textDecoration:'none',cursor:'pointer'}}>פתח</a>
             </div>
           )}
           {stuUploads.filter(up=>!up.seen).length>0&&(
@@ -643,7 +770,7 @@ function TeacherStudentDetail({u,stuUploads,setUploads}){
             }>
               {practFlds.map(([k,l])=><FieldBlock key={k} label={l} value={r[k]}/>)}
               {r.att&&<div style={{marginTop:'6px',padding:'6px 10px',borderRadius:'7px',background:'rgba(16,185,129,.07)',border:'1px solid rgba(16,185,129,.2)'}}>
-                <a href={r.att.url} target="_blank" style={{color:'#059669',fontSize:'.81rem',fontWeight:600,textDecoration:'none'}}>📄 {r.att.name}</a>
+                <a href="#" onClick={e=>{e.preventDefault();openFileUrl(r.att.url);}} style={{color:'#059669',fontSize:'.81rem',fontWeight:600,textDecoration:'none',cursor:'pointer'}}>📄 {r.att.name}</a>
               </div>}
             </SectionCard>
           ))}
@@ -672,7 +799,7 @@ function TeacherStudentDetail({u,stuUploads,setUploads}){
           (u.cases||[]).map((c,i)=>(
             <div key={c.id||i} style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'11px 14px',borderRadius:'9px',background:'rgba(139,92,246,.05)',border:'1px solid rgba(139,92,246,.15)',marginBottom:'7px'}}>
               <div><p style={{margin:'0 0 2px',fontWeight:600,fontSize:'.87rem',color:'#374151'}}>{c.name}</p><p style={{margin:0,fontSize:'.73rem',color:'#9ca3af'}}>{c.at?new Date(c.at).toLocaleDateString('he-IL'):''}</p></div>
-              <a href={c.url} target="_blank" style={{padding:'5px 12px',borderRadius:'7px',background:'#8b5cf6',color:'white',fontSize:'.79rem',fontWeight:600,textDecoration:'none',flexShrink:0}}>פתח</a>
+              <a href="#" onClick={e=>{e.preventDefault();openFileUrl(c.url);}} style={{padding:'5px 12px',borderRadius:'7px',background:'#8b5cf6',color:'white',fontSize:'.79rem',fontWeight:600,textDecoration:'none',flexShrink:0,cursor:'pointer'}}>פתח</a>
             </div>
           ))}
         </div>
@@ -717,7 +844,7 @@ function TeacherStudentDetail({u,stuUploads,setUploads}){
             <p style={{margin:'0 0 3px',fontWeight:700,color:'#059669',fontSize:'.9rem'}}>העבודה הועלתה</p>
             <p style={{margin:'0 0 3px',fontSize:'.87rem',color:'#374151'}}>{u.finalProject.name}</p>
             <p style={{margin:'0 0 12px',fontSize:'.75rem',color:'#9ca3af'}}>{u.finalProject.at?new Date(u.finalProject.at).toLocaleDateString('he-IL'):''}</p>
-            <a href={u.finalProject.url} target="_blank" style={{padding:'7px 16px',borderRadius:'9px',background:'#059669',color:'white',fontSize:'.84rem',fontWeight:600,textDecoration:'none'}}>פתח עבודה</a>
+            <a href="#" onClick={e=>{e.preventDefault();openFileUrl(u.finalProject.url);}} style={{padding:'7px 16px',borderRadius:'9px',background:'#059669',color:'white',fontSize:'.84rem',fontWeight:600,textDecoration:'none',cursor:'pointer'}}>פתח עבודה</a>
           </div>}
         </div>
       )}
@@ -732,8 +859,8 @@ function TeacherStudentDetail({u,stuUploads,setUploads}){
                 {!up.seen&&<span style={{marginRight:'6px',fontSize:'.69rem',color:'#f97316',fontWeight:700}}>● חדש</span>}
                 {up.uploadedAt&&<span style={{display:'block',fontSize:'.69rem',color:'#9ca3af'}}>{new Date(up.uploadedAt).toLocaleDateString('he-IL')}</span>}
               </div>
-              <a href={up.url} target="_blank" onClick={()=>{if(!up.seen){db.collection('uploads').doc(up.id).update({seen:true}).catch(()=>{});setUploads(prev=>prev.map(x=>x.id===up.id?{...x,seen:true}:x));}}}
-                style={{padding:'4px 11px',borderRadius:'7px',background:'#4a6fa5',color:'white',fontSize:'.78rem',fontWeight:600,textDecoration:'none',whiteSpace:'nowrap',flexShrink:0}}>פתח</a>
+              <a href="#" onClick={e=>{e.preventDefault();if(!up.seen){db.collection('uploads').doc(up.id).update({seen:true}).catch(()=>{});setUploads(prev=>prev.map(x=>x.id===up.id?{...x,seen:true}:x));}openFileUrl(up.url);}}
+                style={{padding:'4px 11px',borderRadius:'7px',background:'#4a6fa5',color:'white',fontSize:'.78rem',fontWeight:600,textDecoration:'none',whiteSpace:'nowrap',flexShrink:0,cursor:'pointer'}}>פתח</a>
             </div>
           ))}
         </div>
@@ -1016,15 +1143,18 @@ function LoginPage({users,setUsers,setCur,onLogo}){
     </div>
   );
 }
-function MainApp({user,updateUser,view,setView,onLogout,onLogo,reqOv,siteC}){
+function MainApp({user,updateUser,view,setView,onLogout,onLogo,reqOv,siteC,updates,setUpdates}){
   const req=gReq(user.gender,user.year,reqOv);
   const yr=parseInt(user.year),isFem=user.gender==='female';
   const yl=YL[user.year]||`שנה ${user.year}`;
+  const readUps=user.readUpdates||[];
+  const unreadCount=updates.filter(u=>!readUps.includes(u.id)).length;
   const nav=[
     {id:'dashboard',l:'סקירה'},{id:'practical',l:'שעות התנסות'},
     {id:'supervision',l:'הדרכות אישיות'},{id:'case',l:'הצגת מקרה'},
     ...(isFem&&(yr===2||yr===3)?[{id:'impact',l:'שעות משפיעות'}]:[]),
     ...(isFem&&yr===4?[{id:'proficiency',l:'מבחני בקיאות'},{id:'finalwork',l:'עבודה מסכמת'}]:[]),
+    {id:'updates',l:'עדכונים'},
     {id:'contacts',l:'אנשי קשר'},
   ];
   return(
@@ -1070,17 +1200,18 @@ function MainApp({user,updateUser,view,setView,onLogout,onLogo,reqOv,siteC}){
                 border:view===n.id?'none':'1px solid var(--brd)',
                 boxShadow:view===n.id?'0 3px 10px rgba(74,111,165,.3)':'none'
               }}>
-              {n.l}
+              <span style={{position:'relative'}}>{n.l}{n.id==='updates'&&unreadCount>0&&<span style={{position:'absolute',top:'-8px',left:'-8px',background:'#ef4444',color:'white',borderRadius:'50%',width:'18px',height:'18px',display:'inline-flex',alignItems:'center',justifyContent:'center',fontSize:'.65rem',fontWeight:800,lineHeight:1}}>{unreadCount}</span>}</span>
             </button>
           ))}
         </nav>
-        {view==='dashboard'&&<Dashboard user={user} setView={setView} req={req} siteC={siteC}/>}
+        {view==='dashboard'&&<Dashboard user={user} setView={setView} req={req} siteC={siteC} unreadCount={unreadCount}/>}
         {view==='practical'&&<PracticalHours user={user} updateUser={updateUser} req={req}/>}
         {view==='supervision'&&<SupervisionHours user={user} updateUser={updateUser} req={req}/>}
         {view==='case'&&<CasePresentation user={user} updateUser={updateUser} req={req}/>}
         {view==='impact'&&<ImpactHours user={user} updateUser={updateUser} req={req}/>}
         {view==='proficiency'&&<ProficiencyTests user={user} updateUser={updateUser} req={req}/>}
         {view==='finalwork'&&<FinalProject user={user} updateUser={updateUser}/>}
+        {view==='updates'&&<UpdatesPage user={user} updateUser={updateUser} updates={updates}/>}
         {view==='contacts'&&<Contacts user={user}/>}
       </div>
       <Footer siteC={siteC}/>
@@ -1089,7 +1220,7 @@ function MainApp({user,updateUser,view,setView,onLogout,onLogo,reqOv,siteC}){
 }
 
 // ══════════ DASHBOARD ══════════
-function Dashboard({user,setView,req,siteC}){
+function Dashboard({user,setView,req,siteC,unreadCount}){
   const yr=parseInt(user.year),isFem=user.gender==='female';
   const yl=YL[user.year]||`שנה ${user.year}`;
   const cards=[
@@ -1104,6 +1235,12 @@ function Dashboard({user,setView,req,siteC}){
   ];
   return(
     <div style={{display:'flex',flexDirection:'column',gap:'20px'}}>
+      {unreadCount>0&&(
+        <div onClick={()=>setView('updates')} style={{padding:'14px 20px',borderRadius:'12px',background:'linear-gradient(135deg,#f59e0b,#ef4444)',color:'white',cursor:'pointer',display:'flex',alignItems:'center',gap:'12px',boxShadow:'0 4px 14px rgba(239,68,68,.25)',animation:'fadeSlideUp .4s ease both'}}>
+          <span style={{background:'rgba(255,255,255,.25)',borderRadius:'50%',width:'32px',height:'32px',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'1.1rem',fontWeight:800,flexShrink:0}}>{unreadCount}</span>
+          <div><p style={{margin:0,fontWeight:700,fontSize:'.92rem'}}>יש {unreadCount} עדכונים חדשים!</p><p style={{margin:'2px 0 0',fontSize:'.78rem',opacity:.9}}>לחצו כאן לצפייה בעדכונים</p></div>
+        </div>
+      )}
       {/* HERO */}
       <div style={{borderRadius:'16px',padding:'28px 36px',
         background:`linear-gradient(135deg,var(--hf),var(--ht))`,color:'white'}}>
@@ -1283,7 +1420,7 @@ function PracticalHours({user,updateUser,req}){
       <RC key={r.id} badge={`מפגש #${r.num}`} bc="#4a6fa5" meta={r.date?new Date(r.date).toLocaleDateString('he-IL'):''} onEdit={()=>{setForm(r);setEditIdx(i);setShow(true);window.scrollTo({top:0,behavior:'smooth'});}} onDelete={()=>{if(confirm('למחוק?')){const a=[...user.practical];a.splice(i,1);updateUser({practical:a});}}} expanded={expIdx===i} onToggle={()=>setExpIdx(expIdx===i?null:i)} preview={r.open}>
         <div style={{display:'flex',flexDirection:'column',gap:'9px',marginBottom:'7px'}}>
           {flds.map(([k,t])=><RS key={k} title={t} content={r[k]}/>)}
-          {r.att&&<div style={{padding:'7px 11px',borderRadius:'8px',background:'rgba(16,185,129,.08)',border:'1px solid rgba(16,185,129,.2)'}}><span style={{fontSize:'.81rem',fontWeight:600,color:'#059669'}}>קובץ: </span><a href={r.att.url} target="_blank" style={{color:'#059669',fontSize:'.81rem'}}>{r.att.name}</a></div>}
+          {r.att&&<div style={{padding:'7px 11px',borderRadius:'8px',background:'rgba(16,185,129,.08)',border:'1px solid rgba(16,185,129,.2)'}}><span style={{fontSize:'.81rem',fontWeight:600,color:'#059669'}}>קובץ: </span><a href="#" onClick={e=>{e.preventDefault();openFileUrl(r.att.url);}} style={{color:'#059669',fontSize:'.81rem',cursor:'pointer'}}>{r.att.name}</a></div>}
           <UB onUpload={e=>attach(e,i)} uploading={ul} label="צרף קובץ (PDF/Word)" progress={prog}/>
         </div>
       </RC>
@@ -1328,7 +1465,7 @@ function CasePresentation({user,updateUser,req}){
     {cases.length>0&&<div style={{display:'flex',flexDirection:'column',gap:'7px',marginTop:cases.length<rn?'14px':0}}>{cases.map(c=>(
       <div key={c.id} style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'11px 13px',borderRadius:'9px',background:'rgba(16,185,129,.06)',border:'1px solid rgba(16,185,129,.18)'}}>
         <div><p style={{margin:'0 0 2px',fontWeight:600,fontSize:'.87rem',color:'var(--txt)'}}>{c.name}</p><p style={{margin:0,fontSize:'.73rem',color:'var(--sub)'}}>{c.at?new Date(c.at).toLocaleDateString('he-IL'):''}</p></div>
-        <div style={{display:'flex',gap:'6px'}}><a href={c.url} target="_blank" style={{padding:'5px 11px',borderRadius:'7px',background:'#059669',color:'white',fontSize:'.79rem',fontWeight:600,textDecoration:'none'}}>צפה</a><button onClick={()=>{if(confirm('למחוק?'))updateUser({cases:cases.filter(x=>x.id!==c.id)});}} style={{padding:'5px 11px',borderRadius:'7px',background:'rgba(239,68,68,.1)',color:'#ef4444',fontWeight:600,border:'none',cursor:'pointer',fontSize:'.79rem'}}>מחק</button></div>
+        <div style={{display:'flex',gap:'6px'}}><a href="#" onClick={e=>{e.preventDefault();openFileUrl(c.url);}} style={{padding:'5px 11px',borderRadius:'7px',background:'#059669',color:'white',fontSize:'.79rem',fontWeight:600,textDecoration:'none',cursor:'pointer'}}>צפה</a><button onClick={()=>{if(confirm('למחוק?'))updateUser({cases:cases.filter(x=>x.id!==c.id)});}} style={{padding:'5px 11px',borderRadius:'7px',background:'rgba(239,68,68,.1)',color:'#ef4444',fontWeight:600,border:'none',cursor:'pointer',fontSize:'.79rem'}}>מחק</button></div>
       </div>
     ))}{cases.length<rn&&<UB onUpload={upload} uploading={ul} label="העלה קובץ נוסף"/>}</div>}
     </div></div>);
@@ -1370,8 +1507,70 @@ function FinalProject({user,updateUser}){
     <div className="card" style={{padding:'26px',textAlign:'center'}}>
       {!proj?<><p style={{color:'var(--sub)',marginBottom:'14px'}}>טרם הועלתה עבודה מסכמת</p><UB onUpload={upload} uploading={ul}/><p style={{color:'var(--sub)',fontSize:'.72rem',marginTop:'5px'}}>מקסימום 25MB</p></>
       :<><div style={{padding:'13px 15px',borderRadius:'11px',background:'rgba(16,185,129,.07)',border:'1px solid rgba(16,185,129,.2)',marginBottom:'13px',textAlign:'right'}}><p style={{margin:'0 0 2px',fontWeight:700,color:'#059669',fontSize:'.88rem'}}>העבודה הועלתה</p><p style={{margin:'0 0 1px',fontSize:'.87rem',color:'var(--txt)'}}>{proj.name}</p><p style={{margin:0,fontSize:'.75rem',color:'var(--sub)'}}>{proj.at?new Date(proj.at).toLocaleDateString('he-IL'):''}</p></div>
-      <div style={{display:'flex',gap:'9px',justifyContent:'center'}}><a href={proj.url} target="_blank" style={{padding:'8px 17px',borderRadius:'10px',background:'#059669',color:'white',fontSize:'.85rem',fontWeight:600,textDecoration:'none'}}>צפה בעבודה</a><UB onUpload={upload} uploading={ul} label="החלף קובץ"/></div></>}
+      <div style={{display:'flex',gap:'9px',justifyContent:'center'}}><a href="#" onClick={e=>{e.preventDefault();openFileUrl(proj.url);}} style={{padding:'8px 17px',borderRadius:'10px',background:'#059669',color:'white',fontSize:'.85rem',fontWeight:600,textDecoration:'none',cursor:'pointer'}}>צפה בעבודה</a><UB onUpload={upload} uploading={ul} label="החלף קובץ"/></div></>}
     </div></div>);
+}
+
+function UpdatesPage({user,updateUser,updates}){
+  const readUps=user.readUpdates||[];
+  const markRead=id=>{
+    if(!readUps.includes(id)){
+      const nr=[...readUps,id];
+      updateUser({readUpdates:nr});
+      db.collection('users').doc(user.id).update({readUpdates:nr}).catch(console.error);
+    }
+  };
+  useEffect(()=>{
+    const unread=updates.filter(u=>!readUps.includes(u.id));
+    if(unread.length>0){
+      const nr=[...readUps,...unread.map(u=>u.id)];
+      updateUser({readUpdates:nr});
+      db.collection('users').doc(user.id).update({readUpdates:nr}).catch(console.error);
+    }
+  },[]);
+  return(
+    <div>
+      <h2 style={{fontSize:'1.25rem',fontWeight:800,color:'var(--txt)',margin:'0 0 16px'}}>עדכונים</h2>
+      {updates.length===0?
+        <div className="card" style={{padding:'40px',textAlign:'center'}}>
+          <p style={{color:'var(--sub)',fontSize:'.9rem'}}>אין עדכונים כרגע</p>
+        </div>
+      :updates.map(up=>{
+        const isNew=!readUps.includes(up.id);
+        const ytId=getYouTubeId(up.url);
+        return(
+          <div key={up.id} className="card" style={{padding:'20px',marginBottom:'14px',borderRight:isNew?'4px solid #ef4444':'4px solid transparent',position:'relative'}}>
+            {isNew&&<span style={{position:'absolute',top:'12px',left:'12px',background:'#ef4444',color:'white',padding:'2px 9px',borderRadius:'12px',fontSize:'.7rem',fontWeight:700}}>חדש</span>}
+            <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:'10px'}}>
+              <h3 style={{margin:0,fontSize:'1rem',fontWeight:700,color:'var(--txt)'}}>{up.title}</h3>
+              <span style={{fontSize:'.73rem',color:'var(--sub)',whiteSpace:'nowrap',marginRight:'10px'}}>{up.createdAt?new Date(up.createdAt).toLocaleDateString('he-IL',{day:'numeric',month:'long',year:'numeric'}):''}</span>
+            </div>
+            {up.body&&<p style={{margin:'0 0 12px',fontSize:'.88rem',color:'var(--txt)',lineHeight:1.6,whiteSpace:'pre-line'}}>{up.body}</p>}
+            {ytId&&(
+              <div style={{marginBottom:'12px',borderRadius:'12px',overflow:'hidden',position:'relative',cursor:'pointer',maxWidth:'480px'}}
+                onClick={()=>window.open(up.url,'_blank')}>
+                <img src={`https://img.youtube.com/vi/${ytId}/hqdefault.jpg`} alt="תצוגה מקדימה"
+                  style={{width:'100%',display:'block',borderRadius:'12px'}}/>
+                <div style={{position:'absolute',inset:0,display:'flex',alignItems:'center',justifyContent:'center',background:'rgba(0,0,0,.25)'}}>
+                  <div style={{width:'60px',height:'60px',borderRadius:'50%',background:'rgba(255,0,0,.85)',display:'flex',alignItems:'center',justifyContent:'center'}}>
+                    <div style={{width:0,height:0,borderTop:'14px solid transparent',borderBottom:'14px solid transparent',borderLeft:'22px solid white',marginLeft:'4px'}}/>
+                  </div>
+                </div>
+              </div>
+            )}
+            {up.url&&!ytId&&(
+              <a href={up.url} target="_blank" style={{display:'inline-flex',alignItems:'center',gap:'6px',padding:'8px 16px',borderRadius:'9px',background:'linear-gradient(135deg,var(--a1),var(--a2))',color:'white',textDecoration:'none',fontWeight:600,fontSize:'.84rem'}}>
+                פתח קישור
+              </a>
+            )}
+            <div style={{marginTop:'8px',fontSize:'.73rem',color:'var(--sub)'}}>
+              {up.author&&<span>פורסם ע"י {up.author}</span>}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
 }
 
 function Contacts({user}){
