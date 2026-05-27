@@ -185,7 +185,29 @@ function dataURLtoBlob(dataURL){
   for(let i=0;i<b64.length;i++)arr[i]=b64.charCodeAt(i);
   return new Blob([arr],{type:mime});
 }
-async function openFileUrl(url){
+function showFilePreview(blobUrl,name){
+  const ext=((name||'').split('.').pop()||'').toLowerCase();
+  const isPdf=ext==='pdf'||blobUrl.includes('application/pdf');
+  const old=document.getElementById('file-preview-overlay');if(old)old.remove();
+  const ov=document.createElement('div');ov.id='file-preview-overlay';
+  ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;';
+  ov.onclick=e=>{if(e.target===ov)ov.remove();};
+  const close=document.createElement('button');
+  close.innerHTML='✕';close.style.cssText='position:fixed;top:18px;right:24px;background:rgba(255,255,255,.95);border:none;width:40px;height:40px;border-radius:50%;font-size:1.3rem;cursor:pointer;z-index:10001;box-shadow:0 2px 8px rgba(0,0,0,.2);';
+  close.onclick=()=>ov.remove();ov.appendChild(close);
+  if(isPdf){
+    const ifr=document.createElement('iframe');ifr.src=blobUrl;
+    ifr.style.cssText='width:90vw;height:90vh;border:none;border-radius:12px;background:white;';
+    ov.appendChild(ifr);
+  }else{
+    const box=document.createElement('div');box.style.cssText='background:white;border-radius:16px;padding:44px;text-align:center;max-width:420px;direction:rtl;';
+    box.innerHTML='<div style="font-size:3rem;margin-bottom:12px;">📄</div><p style="font-size:1.1rem;font-weight:700;margin:0 0 8px;color:#1e2a3a;">'+(name||'קובץ')+'</p><p style="color:#6b7280;margin:0 0 22px;font-size:.88rem;">קבצי Word לא ניתנים לתצוגה מקדימה בדפדפן</p><a href="'+blobUrl+'" download="'+(name||'file')+'" style="display:inline-block;padding:11px 28px;background:linear-gradient(135deg,#4a6fa5,#7b4fa6);color:white;border-radius:10px;font-weight:700;text-decoration:none;font-size:.9rem;">הורד קובץ</a>';
+    ov.appendChild(box);
+  }
+  document.body.appendChild(ov);
+  document.addEventListener('keydown',function esc(e){if(e.key==='Escape'){ov.remove();document.removeEventListener('keydown',esc);}});
+}
+async function openFileUrl(url,name){
   if(url&&url.startsWith('#fsfile:')){
     const fileId=url.substring(8);
     try{
@@ -198,9 +220,9 @@ async function openFileUrl(url){
       }
       const blob=dataURLtoBlob(base64);
       const blobUrl=URL.createObjectURL(blob);
-      window.open(blobUrl,'_blank');
+      showFilePreview(blobUrl,meta.name||name||'');
     }catch(e){alert('שגיאה בפתיחת הקובץ: '+e.message);}
-  }else{window.open(url,'_blank');}
+  }else{showFilePreview(url,name||'');}
 }
 function upFileToFirestore(file,uid,cat,onProgress){
   const MAX_CHUNK=700000;
@@ -268,6 +290,7 @@ function App(){
   const [teacherPw,setTeacherPw]=useState('1234');
   const [isAdmin,setIsAdmin]=useState(false);
   const [isTeacher,setIsTeacher]=useState(false);
+  const [teacherGender,setTeacherGender]=useState(null);
   const logoClicksRef=useRef([]);
   const [siteC,setSiteC]=useState({});
   const [reqOv,setReqOv]=useState({});
@@ -329,7 +352,13 @@ function App(){
         else if(pw) alert('סיסמה שגויה');
       } else if(choice==='2'){
         const pw=prompt('סיסמת מחנך:');
-        if(pw===teacherPw){setIsTeacher(true);setView('teacher');}
+        if(pw===teacherPw){
+          const g=prompt('בחר מגדר:\n1 — גברים\n2 — נשים');
+          if(g==='1'||g==='2'){
+            setTeacherGender(g==='1'?'male':'female');
+            setIsTeacher(true);setView('teacher');
+          } else if(g) alert('בחירה לא תקינה');
+        }
         else if(pw) alert('סיסמה שגויה');
       }
     } else {
@@ -345,13 +374,13 @@ function App(){
       updates={updates} setUpdates={setUpdates}/>;
 
   if(isTeacher&&view==='teacher')
-    return <TeacherPanel users={users} setIsTeacher={setIsTeacher} setView={setView}/>;
+    return <TeacherPanel users={users} setIsTeacher={setIsTeacher} setView={setView} lockedGender={teacherGender} setTeacherGender={setTeacherGender}/>;
 
   if(!cur)
     return <LoginPage users={users} setUsers={setUsers} setCur={setCur} onLogo={handleLogo}/>;
 
   return <MainApp user={cur} updateUser={updateUser} view={view} setView={setView}
-    onLogout={()=>{setCur(null);setView('login');setIsAdmin(false);setIsTeacher(false);try{localStorage.removeItem('cur_user');}catch(e){}}}
+    onLogout={()=>{setCur(null);setView('login');setIsAdmin(false);setIsTeacher(false);setTeacherGender(null);try{localStorage.removeItem('cur_user');}catch(e){}}}
     onLogo={handleLogo} reqOv={reqOv} siteC={siteC}
     updates={updates} setUpdates={setUpdates}/>;
 }
@@ -397,7 +426,7 @@ function AdminStudentDetail({uid,users,setUsers,onClose}){
               <div><span style={{fontWeight:700,fontSize:'.87rem',color:'#1e40af'}}>מפגש #{r.num}</span><span style={{marginRight:'8px',fontSize:'.78rem',color:'#6b7280'}}>{r.date?new Date(r.date).toLocaleDateString('he-IL'):''}</span></div>
               <DelBtn onClick={()=>delItem('practical',i)}/>
             </div>
-            <div style={{padding:'12px'}}>{practFlds.map(([k,l])=><FB key={k} label={l} value={r[k]}/>)}{r.att&&<a href="#" onClick={e=>{e.preventDefault();openFileUrl(r.att.url);}} style={{color:'#059669',fontSize:'.81rem',fontWeight:600,textDecoration:'none',cursor:'pointer'}}>📄 {r.att.name}</a>}</div>
+            <div style={{padding:'12px'}}>{practFlds.map(([k,l])=><FB key={k} label={l} value={r[k]}/>)}{r.att&&<a href="#" onClick={e=>{e.preventDefault();openFileUrl(r.att.url,r.att.name);}} style={{color:'#059669',fontSize:'.81rem',fontWeight:600,textDecoration:'none',cursor:'pointer'}}>📄 {r.att.name}</a>}</div>
           </div>
         )))}
         {tab==='supervision'&&(!(u.supervision||[]).length?<Empty/>:(u.supervision||[]).map((r,i)=>(
@@ -412,7 +441,7 @@ function AdminStudentDetail({uid,users,setUsers,onClose}){
         {tab==='cases'&&(!(u.cases||[]).length?<Empty/>:(u.cases||[]).map((c,i)=>(
           <div key={c.id||i} style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'11px 14px',borderRadius:'9px',background:'rgba(139,92,246,.05)',border:'1px solid rgba(139,92,246,.15)',marginBottom:'7px'}}>
             <div><p style={{margin:'0 0 2px',fontWeight:600,fontSize:'.87rem',color:'#374151'}}>{c.name}</p><p style={{margin:0,fontSize:'.73rem',color:'#9ca3af'}}>{c.at?new Date(c.at).toLocaleDateString('he-IL'):''}</p></div>
-            <div style={{display:'flex',gap:'6px'}}><a href="#" onClick={e=>{e.preventDefault();openFileUrl(c.url);}} style={{padding:'4px 10px',borderRadius:'7px',background:'#8b5cf6',color:'white',fontSize:'.78rem',fontWeight:600,textDecoration:'none',cursor:'pointer'}}>פתח</a><DelBtn onClick={()=>delItem('cases',i)}/></div>
+            <div style={{display:'flex',gap:'6px'}}><a href="#" onClick={e=>{e.preventDefault();openFileUrl(c.url,c.name);}} style={{padding:'4px 10px',borderRadius:'7px',background:'#8b5cf6',color:'white',fontSize:'.78rem',fontWeight:600,textDecoration:'none',cursor:'pointer'}}>פתח</a><DelBtn onClick={()=>delItem('cases',i)}/></div>
           </div>
         )))}
         {tab==='impact'&&(!(u.impact||[]).length?<Empty/>:(u.impact||[]).map((h,i)=>(
@@ -433,7 +462,7 @@ function AdminStudentDetail({uid,users,setUsers,onClose}){
         {tab==='final'&&(!u.finalProject?<Empty t="לא הועלתה עבודה מסכמת"/>:
           <div style={{padding:'14px',borderRadius:'11px',background:'rgba(16,185,129,.07)',border:'1px solid rgba(16,185,129,.2)',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
             <div><p style={{margin:'0 0 2px',fontWeight:700,color:'#059669',fontSize:'.9rem'}}>{u.finalProject.name}</p><p style={{margin:0,fontSize:'.75rem',color:'#9ca3af'}}>{u.finalProject.at?new Date(u.finalProject.at).toLocaleDateString('he-IL'):''}</p></div>
-            <div style={{display:'flex',gap:'6px'}}><a href="#" onClick={e=>{e.preventDefault();openFileUrl(u.finalProject.url);}} style={{padding:'5px 12px',borderRadius:'7px',background:'#059669',color:'white',fontSize:'.79rem',fontWeight:600,textDecoration:'none',cursor:'pointer'}}>פתח</a><DelBtn onClick={()=>{if(confirm('למחוק עבודה מסכמת?'))upd({finalProject:null});}}/></div>
+            <div style={{display:'flex',gap:'6px'}}><a href="#" onClick={e=>{e.preventDefault();openFileUrl(u.finalProject.url,u.finalProject.name);}} style={{padding:'5px 12px',borderRadius:'7px',background:'#059669',color:'white',fontSize:'.79rem',fontWeight:600,textDecoration:'none',cursor:'pointer'}}>פתח</a><DelBtn onClick={()=>{if(confirm('למחוק עבודה מסכמת?'))upd({finalProject:null});}}/></div>
           </div>
         )}
       </div>
@@ -596,7 +625,7 @@ function AdminPanel({users,setUsers,adminPw,setAdminPw,teacherPw,setTeacherPw,se
                       <span style={{fontSize:'.79rem',color:'#6b7280'}}>{f.name}</span>
                       {f.at&&<span style={{display:'block',fontSize:'.71rem',color:'#9ca3af',marginTop:'1px'}}>{new Date(f.at).toLocaleDateString('he-IL')}</span>}
                     </div>
-                    <a href="#" onClick={e=>{e.preventDefault();openFileUrl(f.url);}} style={{padding:'5px 13px',borderRadius:'7px',background:'#4a6fa5',color:'white',fontSize:'.79rem',fontWeight:600,textDecoration:'none',whiteSpace:'nowrap',cursor:'pointer'}}>פתח</a>
+                    <a href="#" onClick={e=>{e.preventDefault();openFileUrl(f.url,f.name);}} style={{padding:'5px 13px',borderRadius:'7px',background:'#4a6fa5',color:'white',fontSize:'.79rem',fontWeight:600,textDecoration:'none',whiteSpace:'nowrap',cursor:'pointer'}}>פתח</a>
                   </div>
                 ))}
               </div>
@@ -724,7 +753,7 @@ function TeacherStudentDetail({u,stuUploads,setUploads}){
           {u.finalProject&&(
             <div style={{padding:'10px 13px',borderRadius:'9px',background:'rgba(16,185,129,.07)',border:'1px solid rgba(16,185,129,.2)',marginBottom:'10px',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
               <div><p style={{margin:'0 0 1px',fontWeight:700,color:'#059669',fontSize:'.85rem'}}>עבודה מסכמת הועלתה</p><p style={{margin:0,fontSize:'.76rem',color:'#6b7280'}}>{u.finalProject.name}</p></div>
-              <a href="#" onClick={e=>{e.preventDefault();openFileUrl(u.finalProject.url);}} style={{padding:'5px 12px',borderRadius:'7px',background:'#059669',color:'white',fontSize:'.79rem',fontWeight:600,textDecoration:'none',cursor:'pointer'}}>פתח</a>
+              <a href="#" onClick={e=>{e.preventDefault();openFileUrl(u.finalProject.url,u.finalProject.name);}} style={{padding:'5px 12px',borderRadius:'7px',background:'#059669',color:'white',fontSize:'.79rem',fontWeight:600,textDecoration:'none',cursor:'pointer'}}>פתח</a>
             </div>
           )}
           {stuUploads.filter(up=>!up.seen).length>0&&(
@@ -747,7 +776,7 @@ function TeacherStudentDetail({u,stuUploads,setUploads}){
             }>
               {practFlds.map(([k,l])=><FieldBlock key={k} label={l} value={r[k]}/>)}
               {r.att&&<div style={{marginTop:'6px',padding:'6px 10px',borderRadius:'7px',background:'rgba(16,185,129,.07)',border:'1px solid rgba(16,185,129,.2)'}}>
-                <a href="#" onClick={e=>{e.preventDefault();openFileUrl(r.att.url);}} style={{color:'#059669',fontSize:'.81rem',fontWeight:600,textDecoration:'none',cursor:'pointer'}}>📄 {r.att.name}</a>
+                <a href="#" onClick={e=>{e.preventDefault();openFileUrl(r.att.url,r.att.name);}} style={{color:'#059669',fontSize:'.81rem',fontWeight:600,textDecoration:'none',cursor:'pointer'}}>📄 {r.att.name}</a>
               </div>}
             </SectionCard>
           ))}
@@ -776,7 +805,7 @@ function TeacherStudentDetail({u,stuUploads,setUploads}){
           (u.cases||[]).map((c,i)=>(
             <div key={c.id||i} style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'11px 14px',borderRadius:'9px',background:'rgba(139,92,246,.05)',border:'1px solid rgba(139,92,246,.15)',marginBottom:'7px'}}>
               <div><p style={{margin:'0 0 2px',fontWeight:600,fontSize:'.87rem',color:'#374151'}}>{c.name}</p><p style={{margin:0,fontSize:'.73rem',color:'#9ca3af'}}>{c.at?new Date(c.at).toLocaleDateString('he-IL'):''}</p></div>
-              <a href="#" onClick={e=>{e.preventDefault();openFileUrl(c.url);}} style={{padding:'5px 12px',borderRadius:'7px',background:'#8b5cf6',color:'white',fontSize:'.79rem',fontWeight:600,textDecoration:'none',flexShrink:0,cursor:'pointer'}}>פתח</a>
+              <a href="#" onClick={e=>{e.preventDefault();openFileUrl(c.url,c.name);}} style={{padding:'5px 12px',borderRadius:'7px',background:'#8b5cf6',color:'white',fontSize:'.79rem',fontWeight:600,textDecoration:'none',flexShrink:0,cursor:'pointer'}}>פתח</a>
             </div>
           ))}
         </div>
@@ -821,7 +850,7 @@ function TeacherStudentDetail({u,stuUploads,setUploads}){
             <p style={{margin:'0 0 3px',fontWeight:700,color:'#059669',fontSize:'.9rem'}}>העבודה הועלתה</p>
             <p style={{margin:'0 0 3px',fontSize:'.87rem',color:'#374151'}}>{u.finalProject.name}</p>
             <p style={{margin:'0 0 12px',fontSize:'.75rem',color:'#9ca3af'}}>{u.finalProject.at?new Date(u.finalProject.at).toLocaleDateString('he-IL'):''}</p>
-            <a href="#" onClick={e=>{e.preventDefault();openFileUrl(u.finalProject.url);}} style={{padding:'7px 16px',borderRadius:'9px',background:'#059669',color:'white',fontSize:'.84rem',fontWeight:600,textDecoration:'none',cursor:'pointer'}}>פתח עבודה</a>
+            <a href="#" onClick={e=>{e.preventDefault();openFileUrl(u.finalProject.url,u.finalProject.name);}} style={{padding:'7px 16px',borderRadius:'9px',background:'#059669',color:'white',fontSize:'.84rem',fontWeight:600,textDecoration:'none',cursor:'pointer'}}>פתח עבודה</a>
           </div>}
         </div>
       )}
@@ -836,7 +865,7 @@ function TeacherStudentDetail({u,stuUploads,setUploads}){
                 {!up.seen&&<span style={{marginRight:'6px',fontSize:'.69rem',color:'#f97316',fontWeight:700}}>● חדש</span>}
                 {up.uploadedAt&&<span style={{display:'block',fontSize:'.69rem',color:'#9ca3af'}}>{new Date(up.uploadedAt).toLocaleDateString('he-IL')}</span>}
               </div>
-              <a href="#" onClick={e=>{e.preventDefault();if(!up.seen){db.collection('uploads').doc(up.id).update({seen:true}).catch(()=>{});setUploads(prev=>prev.map(x=>x.id===up.id?{...x,seen:true}:x));}openFileUrl(up.url);}}
+              <a href="#" onClick={e=>{e.preventDefault();if(!up.seen){db.collection('uploads').doc(up.id).update({seen:true}).catch(()=>{});setUploads(prev=>prev.map(x=>x.id===up.id?{...x,seen:true}:x));}openFileUrl(up.url,up.fileName);}}
                 style={{padding:'4px 11px',borderRadius:'7px',background:'#4a6fa5',color:'white',fontSize:'.78rem',fontWeight:600,textDecoration:'none',whiteSpace:'nowrap',flexShrink:0,cursor:'pointer'}}>פתח</a>
             </div>
           ))}
@@ -847,8 +876,8 @@ function TeacherStudentDetail({u,stuUploads,setUploads}){
 }
 
 // ══════════ TEACHER PANEL (read-only) ══════════
-function TeacherPanel({users,setIsTeacher,setView}){
-  const [gender,setGender]=useState(null);
+function TeacherPanel({users,setIsTeacher,setView,lockedGender,setTeacherGender}){
+  const [gender,setGender]=useState(lockedGender||null);
   const [year,setYear]=useState(null);
   const [sel,setSel]=useState(null);
   const [uploads,setUploads]=useState([]);
@@ -877,8 +906,8 @@ function TeacherPanel({users,setIsTeacher,setView}){
       <header style={{background:'linear-gradient(135deg,#3d5a8a,#7b4fa6)',padding:'12px 28px',color:'white',display:'flex',justifyContent:'space-between',alignItems:'center',flexWrap:'wrap',gap:'10px'}}>
         <div style={{display:'flex',alignItems:'center',gap:'10px'}}>
           {(gender||year)&&(
-            <button onClick={()=>{if(year){setYear(null);setSel(null);}else{setGender(null);setYear(null);setSel(null);}}}
-              style={{background:'rgba(255,255,255,.2)',border:'none',color:'white',padding:'5px 12px',borderRadius:'8px',cursor:'pointer',fontWeight:600,fontSize:'.82rem'}}>
+            <button onClick={()=>{if(sel){setSel(null);}else if(year){setYear(null);setSel(null);}else if(!lockedGender){setGender(null);setYear(null);setSel(null);}}}
+              style={{background:'rgba(255,255,255,.2)',border:'none',color:'white',padding:'5px 12px',borderRadius:'8px',cursor:'pointer',fontWeight:600,fontSize:'.82rem',display:(gender||year||sel)?'inline-block':'none'}}>
               ← חזור
             </button>
           )}
@@ -890,7 +919,7 @@ function TeacherPanel({users,setIsTeacher,setView}){
             {newCount>0&&<span style={{fontSize:'.75rem',background:'#ef4444',padding:'1px 7px',borderRadius:'10px',marginTop:'2px',display:'inline-block'}}>●{newCount} קבצים חדשים</span>}
           </div>
         </div>
-        <button onClick={()=>{setIsTeacher(false);setView('login');}} style={{padding:'7px 16px',borderRadius:'9px',background:'rgba(255,255,255,.2)',color:'white',fontWeight:700,border:'1px solid rgba(255,255,255,.3)',cursor:'pointer',fontSize:'.84rem'}}>יציאה</button>
+        <button onClick={()=>{setIsTeacher(false);setView('login');if(setTeacherGender)setTeacherGender(null);}} style={{padding:'7px 16px',borderRadius:'9px',background:'rgba(255,255,255,.2)',color:'white',fontWeight:700,border:'1px solid rgba(255,255,255,.3)',cursor:'pointer',fontSize:'.84rem'}}>יציאה</button>
       </header>
 
       <div style={{maxWidth:'1100px',width:'100%',margin:'0 auto',padding:'20px 24px',boxSizing:'border-box'}}>
@@ -1412,7 +1441,7 @@ function PracticalHours({user,updateUser,req}){
       <RC key={r.id} badge={`מפגש #${r.num}`} bc="#4a6fa5" meta={r.date?new Date(r.date).toLocaleDateString('he-IL'):''} onEdit={()=>{setForm(r);setEditIdx(i);setShow(true);window.scrollTo({top:0,behavior:'smooth'});}} onDelete={()=>{if(confirm('למחוק?')){const a=[...user.practical];a.splice(i,1);updateUser({practical:a});}}} expanded={expIdx===i} onToggle={()=>setExpIdx(expIdx===i?null:i)} preview={r.open}>
         <div style={{display:'flex',flexDirection:'column',gap:'9px',marginBottom:'7px'}}>
           {flds.map(([k,t])=><RS key={k} title={t} content={r[k]}/>)}
-          {r.att&&<div style={{padding:'7px 11px',borderRadius:'8px',background:'rgba(16,185,129,.08)',border:'1px solid rgba(16,185,129,.2)'}}><span style={{fontSize:'.81rem',fontWeight:600,color:'#059669'}}>קובץ: </span><a href="#" onClick={e=>{e.preventDefault();openFileUrl(r.att.url);}} style={{color:'#059669',fontSize:'.81rem',cursor:'pointer'}}>{r.att.name}</a></div>}
+          {r.att&&<div style={{padding:'7px 11px',borderRadius:'8px',background:'rgba(16,185,129,.08)',border:'1px solid rgba(16,185,129,.2)'}}><span style={{fontSize:'.81rem',fontWeight:600,color:'#059669'}}>קובץ: </span><a href="#" onClick={e=>{e.preventDefault();openFileUrl(r.att.url,r.att.name);}} style={{color:'#059669',fontSize:'.81rem',cursor:'pointer'}}>{r.att.name}</a></div>}
           <UB onUpload={e=>attach(e,i)} uploading={ul} label="צרף קובץ (PDF/Word)" progress={prog}/>
         </div>
       </RC>
@@ -1457,7 +1486,7 @@ function CasePresentation({user,updateUser,req}){
     {cases.length>0&&<div style={{display:'flex',flexDirection:'column',gap:'7px',marginTop:cases.length<rn?'14px':0}}>{cases.map(c=>(
       <div key={c.id} style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'11px 13px',borderRadius:'9px',background:'rgba(16,185,129,.06)',border:'1px solid rgba(16,185,129,.18)'}}>
         <div><p style={{margin:'0 0 2px',fontWeight:600,fontSize:'.87rem',color:'var(--txt)'}}>{c.name}</p><p style={{margin:0,fontSize:'.73rem',color:'var(--sub)'}}>{c.at?new Date(c.at).toLocaleDateString('he-IL'):''}</p></div>
-        <div style={{display:'flex',gap:'6px'}}><a href="#" onClick={e=>{e.preventDefault();openFileUrl(c.url);}} style={{padding:'5px 11px',borderRadius:'7px',background:'#059669',color:'white',fontSize:'.79rem',fontWeight:600,textDecoration:'none',cursor:'pointer'}}>צפה</a><button onClick={()=>{if(confirm('למחוק?'))updateUser({cases:cases.filter(x=>x.id!==c.id)});}} style={{padding:'5px 11px',borderRadius:'7px',background:'rgba(239,68,68,.1)',color:'#ef4444',fontWeight:600,border:'none',cursor:'pointer',fontSize:'.79rem'}}>מחק</button></div>
+        <div style={{display:'flex',gap:'6px'}}><a href="#" onClick={e=>{e.preventDefault();openFileUrl(c.url,c.name);}} style={{padding:'5px 11px',borderRadius:'7px',background:'#059669',color:'white',fontSize:'.79rem',fontWeight:600,textDecoration:'none',cursor:'pointer'}}>צפה</a><button onClick={()=>{if(confirm('למחוק?'))updateUser({cases:cases.filter(x=>x.id!==c.id)});}} style={{padding:'5px 11px',borderRadius:'7px',background:'rgba(239,68,68,.1)',color:'#ef4444',fontWeight:600,border:'none',cursor:'pointer',fontSize:'.79rem'}}>מחק</button></div>
       </div>
     ))}{cases.length<rn&&<UB onUpload={upload} uploading={ul} progress={prog} label="העלה קובץ נוסף"/>}</div>}
     </div></div>);
@@ -1499,7 +1528,7 @@ function FinalProject({user,updateUser}){
     <div className="card" style={{padding:'26px',textAlign:'center'}}>
       {!proj?<><p style={{color:'var(--sub)',marginBottom:'14px'}}>טרם הועלתה עבודה מסכמת</p><UB onUpload={upload} uploading={ul} progress={prog}/><p style={{color:'var(--sub)',fontSize:'.72rem',marginTop:'5px'}}>מקסימום 10MB</p></>
       :<><div style={{padding:'13px 15px',borderRadius:'11px',background:'rgba(16,185,129,.07)',border:'1px solid rgba(16,185,129,.2)',marginBottom:'13px',textAlign:'right'}}><p style={{margin:'0 0 2px',fontWeight:700,color:'#059669',fontSize:'.88rem'}}>העבודה הועלתה</p><p style={{margin:'0 0 1px',fontSize:'.87rem',color:'var(--txt)'}}>{proj.name}</p><p style={{margin:0,fontSize:'.75rem',color:'var(--sub)'}}>{proj.at?new Date(proj.at).toLocaleDateString('he-IL'):''}</p></div>
-      <div style={{display:'flex',gap:'9px',justifyContent:'center'}}><a href="#" onClick={e=>{e.preventDefault();openFileUrl(proj.url);}} style={{padding:'8px 17px',borderRadius:'10px',background:'#059669',color:'white',fontSize:'.85rem',fontWeight:600,textDecoration:'none',cursor:'pointer'}}>צפה בעבודה</a><UB onUpload={upload} uploading={ul} progress={prog} label="החלף קובץ"/></div></>}
+      <div style={{display:'flex',gap:'9px',justifyContent:'center'}}><a href="#" onClick={e=>{e.preventDefault();openFileUrl(proj.url,proj.name);}} style={{padding:'8px 17px',borderRadius:'10px',background:'#059669',color:'white',fontSize:'.85rem',fontWeight:600,textDecoration:'none',cursor:'pointer'}}>צפה בעבודה</a><UB onUpload={upload} uploading={ul} progress={prog} label="החלף קובץ"/></div></>}
     </div></div>);
 }
 
