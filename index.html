@@ -509,6 +509,7 @@ function AdminPanel({users,setUsers,adminPw,setAdminPw,teacherPw,setTeacherPw,se
   const [upForm,setUpForm]=useState({title:'',body:'',url:'',author:'הנהלה'});
   const [addingUp,setAddingUp]=useState(false);
   const [savingUp,setSavingUp]=useState(false);
+  const [editingUp,setEditingUp]=useState(null);
   const addUpdate=async()=>{
     if(!upForm.title.trim()){alert('נא להזין כותרת');return;}
     setSavingUp(true);
@@ -526,6 +527,17 @@ function AdminPanel({users,setUsers,adminPw,setAdminPw,teacherPw,setTeacherPw,se
     if(!confirm('למחוק עדכון זה?'))return;
     try{await db.collection('updates').doc(id).delete();setUpdates(prev=>prev.filter(u=>u.id!==id));}
     catch(e){alert('שגיאה: '+e.message);}
+  };
+  const saveEditUpdate=async()=>{
+    if(!editingUp||!editingUp.title.trim()){alert('נא להזין כותרת');return;}
+    setSavingUp(true);
+    try{
+      const {id,...data}=editingUp;
+      await db.collection('updates').doc(id).update(data);
+      setUpdates(prev=>prev.map(u=>u.id===id?{...u,...data}:u));
+      setEditingUp(null);
+    }catch(e){alert('שגיאה: '+e.message);}
+    setSavingUp(false);
   };
 
   useEffect(()=>{
@@ -690,7 +702,20 @@ function AdminPanel({users,setUsers,adminPw,setAdminPw,teacherPw,setTeacherPw,se
             )}
             {updates.length===0?<p style={{color:'#9ca3af',textAlign:'center',padding:'28px'}}>אין עדכונים</p>:
               <div style={{display:'flex',flexDirection:'column',gap:'9px'}}>
-                {updates.map(up=>(
+                {updates.map(up=>editingUp&&editingUp.id===up.id?(
+                  <div key={up.id} style={{padding:'15px',borderRadius:'10px',background:'#fffbeb',border:'2px solid #f59e0b'}}>
+                    <div style={{display:'flex',flexDirection:'column',gap:'8px'}}>
+                      <input type="text" value={editingUp.title} onChange={e=>setEditingUp({...editingUp,title:e.target.value})} style={{width:'100%',padding:'8px 10px',borderRadius:'8px',border:'2px solid #e5e7eb',fontSize:'.88rem',fontWeight:700}}/>
+                      <textarea value={editingUp.body||''} onChange={e=>setEditingUp({...editingUp,body:e.target.value})} rows={3} style={{width:'100%',padding:'8px 10px',borderRadius:'8px',border:'2px solid #e5e7eb',fontSize:'.85rem',resize:'vertical'}}/>
+                      <input type="url" value={editingUp.url||''} onChange={e=>setEditingUp({...editingUp,url:e.target.value})} placeholder="קישור (אופציונלי)" dir="ltr" style={{width:'100%',padding:'8px 10px',borderRadius:'8px',border:'2px solid #e5e7eb',fontSize:'.85rem'}}/>
+                      <input type="text" value={editingUp.author||''} onChange={e=>setEditingUp({...editingUp,author:e.target.value})} placeholder="פורסם ע״י" style={{width:'100%',padding:'8px 10px',borderRadius:'8px',border:'2px solid #e5e7eb',fontSize:'.85rem'}}/>
+                      <div style={{display:'flex',gap:'8px'}}>
+                        <button onClick={saveEditUpdate} disabled={savingUp} style={{padding:'7px 18px',borderRadius:'8px',background:'#059669',color:'white',fontWeight:700,border:'none',cursor:'pointer',fontSize:'.82rem',opacity:savingUp?.6:1}}>{savingUp?'שומר...':'שמור'}</button>
+                        <button onClick={()=>setEditingUp(null)} style={{padding:'7px 18px',borderRadius:'8px',background:'#e5e7eb',color:'#374151',fontWeight:700,border:'none',cursor:'pointer',fontSize:'.82rem'}}>ביטול</button>
+                      </div>
+                    </div>
+                  </div>
+                ):(
                   <div key={up.id} style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',padding:'13px 15px',borderRadius:'10px',background:'#f9fafb',border:'1px solid #e5e7eb'}}>
                     <div style={{flex:1}}>
                       <p style={{margin:'0 0 3px',fontWeight:700,fontSize:'.88rem',color:'#1e2a3a'}}>{up.title}</p>
@@ -701,7 +726,10 @@ function AdminPanel({users,setUsers,adminPw,setAdminPw,teacherPw,setTeacherPw,se
                         {up.url&&<span style={{color:'#4a6fa5'}}>+ קישור</span>}
                       </div>
                     </div>
-                    <button onClick={()=>delUpdate(up.id)} style={{padding:'4px 10px',borderRadius:'7px',background:'rgba(239,68,68,.1)',color:'#ef4444',fontWeight:700,border:'1px solid rgba(239,68,68,.2)',cursor:'pointer',fontSize:'.75rem',flexShrink:0,marginRight:'10px'}}>מחק</button>
+                    <div style={{display:'flex',gap:'6px',flexShrink:0,marginRight:'10px'}}>
+                      <button onClick={()=>setEditingUp({...up})} style={{padding:'4px 10px',borderRadius:'7px',background:'rgba(59,130,246,.1)',color:'#3b82f6',fontWeight:700,border:'1px solid rgba(59,130,246,.2)',cursor:'pointer',fontSize:'.75rem'}}>ערוך</button>
+                      <button onClick={()=>delUpdate(up.id)} style={{padding:'4px 10px',borderRadius:'7px',background:'rgba(239,68,68,.1)',color:'#ef4444',fontWeight:700,border:'1px solid rgba(239,68,68,.2)',cursor:'pointer',fontSize:'.75rem'}}>מחק</button>
+                    </div>
                   </div>
                 ))}
               </div>
