@@ -231,30 +231,7 @@ function upFileToFirestore(file,uid,cat,onProgress){
   });
 }
 function upFile(file,uid,cat,onProgress){
-  return new Promise((resolve,reject)=>{
-    try{
-      const ref=storage.ref(`uploads/${uid}/${cat}/${Date.now()}_${file.name}`);
-      const task=ref.put(file);
-      task.on('state_changed',
-        snap=>{if(onProgress){const pct=Math.round((snap.bytesTransferred/snap.totalBytes)*100);onProgress(pct);}},
-        async err=>{
-          console.warn('Storage upload failed, using Firestore fallback:',err);
-          try{const r=await upFileToFirestore(file,uid,cat,onProgress);resolve(r);}
-          catch(e2){reject(e2);}
-        },
-        async()=>{
-          try{
-            const url=await task.snapshot.ref.getDownloadURL();
-            const result={url,name:file.name,at:new Date().toISOString(),uid,cat};
-            try{await db.collection('uploads').add({studentId:uid,category:cat,fileName:file.name,url,uploadedAt:new Date().toISOString(),seen:false});}catch(e){console.warn('notification save failed:',e);}
-            resolve(result);
-          }catch(e){reject(e);}
-        }
-      );
-    }catch(e){
-      upFileToFirestore(file,uid,cat,onProgress).then(resolve).catch(reject);
-    }
-  });
+  return upFileToFirestore(file,uid,cat,onProgress);
 }
 function WaBtn({href,label,sm}){
   return <a href={href} target="_blank" style={{
@@ -1372,17 +1349,32 @@ function RC({badge,bc,meta,onEdit,onDelete,expanded,onToggle,children,preview}){
   );
 }
 function UB({onUpload,uploading,label,progress}){
+  const r=40,c=2*Math.PI*r,pct=progress||0,off=c-(pct/100)*c;
   return(
-    <div>
-      <label style={{cursor:uploading?'not-allowed':'pointer',opacity:uploading?.6:1}}>
-        <span className="btn-p" style={{display:'inline-block',padding:'8px 17px',borderRadius:'10px',fontWeight:700,fontSize:'.85rem',cursor:'pointer'}}>
-          {uploading?(progress!=null?`מעלה... ${progress}%`:'מעלה...'):(label||'העלה קובץ (PDF / Word)')}
-        </span>
-        <input type="file" accept=".pdf,.doc,.docx" onChange={onUpload} disabled={uploading} style={{display:'none'}}/>
-      </label>
-      {uploading&&progress!=null&&(
-        <div style={{marginTop:'6px',height:'6px',background:'#e5e7eb',borderRadius:'3px',overflow:'hidden',maxWidth:'220px'}}>
-          <div style={{height:'100%',width:progress+'%',background:'#4a6fa5',borderRadius:'3px',transition:'width .3s'}}/>
+    <div style={{display:'flex',flexDirection:'column',alignItems:'center',gap:'8px'}}>
+      {!uploading?(
+        <label style={{cursor:'pointer'}}>
+          <span className="btn-p" style={{display:'inline-block',padding:'8px 17px',borderRadius:'10px',fontWeight:700,fontSize:'.85rem',cursor:'pointer'}}>
+            {label||'העלה קובץ (PDF / Word)'}
+          </span>
+          <input type="file" accept=".pdf,.doc,.docx" onChange={onUpload} disabled={uploading} style={{display:'none'}}/>
+        </label>
+      ):(
+        <div style={{position:'relative',width:'90px',height:'90px',display:'flex',alignItems:'center',justifyContent:'center'}}>
+          <svg width="90" height="90" style={{transform:'rotate(-90deg)'}}>
+            <circle cx="45" cy="45" r={r} fill="none" stroke="#e5e7eb" strokeWidth="6"/>
+            <circle cx="45" cy="45" r={r} fill="none" stroke="var(--a1)" strokeWidth="6"
+              strokeDasharray={c} strokeDashoffset={progress!=null?off:0}
+              strokeLinecap="round" style={{transition:'stroke-dashoffset .4s ease'}}/>
+            {progress==null&&<circle cx="45" cy="45" r={r} fill="none" stroke="var(--a1)" strokeWidth="6"
+              strokeDasharray={`${c*0.25} ${c*0.75}`} strokeLinecap="round">
+              <animateTransform attributeName="transform" type="rotate" from="0 45 45" to="360 45 45" dur="1s" repeatCount="indefinite"/>
+            </circle>}
+          </svg>
+          <div style={{position:'absolute',textAlign:'center'}}>
+            <div style={{fontWeight:800,fontSize:'1rem',color:'var(--txt)'}}>{progress!=null?`${pct}%`:'...'}</div>
+            <div style={{fontSize:'.65rem',color:'var(--sub)'}}>מעלה</div>
+          </div>
         </div>
       )}
     </div>
@@ -1458,16 +1450,16 @@ function SupervisionHours({user,updateUser,req}){
 }
 
 function CasePresentation({user,updateUser,req}){
-  const [ul,setUl]=useState(false);const cases=user.cases||[];const rn=req.c||1;
-  const upload=async e=>{const f=e.target.files[0];if(!f)return;const ext2=(f.name.split('.').pop()||'').toLowerCase();if(!['pdf','doc','docx'].includes(ext2)){alert('PDF או Word בלבד');return;}setUl(true);try{const r=await upFile(f,user.id,'cases');updateUser({cases:[...cases,{id:Date.now().toString(),...r}]});alert('הועלה בהצלחה!');}catch(e){console.error(e);alert('שגיאה בהעלאה: '+(e.message||e.code||String(e)));}setUl(false);e.target.value='';};
+  const [ul,setUl]=useState(false);const [prog,setProg]=useState(null);const cases=user.cases||[];const rn=req.c||1;
+  const upload=async e=>{const f=e.target.files[0];if(!f)return;const ext2=(f.name.split('.').pop()||'').toLowerCase();if(!['pdf','doc','docx'].includes(ext2)){alert('PDF או Word בלבד');return;}setUl(true);setProg(0);try{const r=await upFile(f,user.id,'cases',p=>setProg(p));updateUser({cases:[...cases,{id:Date.now().toString(),...r}]});alert('הועלה בהצלחה!');}catch(e){console.error(e);alert('שגיאה בהעלאה: '+(e.message||e.code||String(e)));}setUl(false);setProg(null);e.target.value='';};
   return(<div><SH title="הצגת מקרה" sub="העלאת קובץ PDF או Word" done={cases.length} total={rn} color="#8b5cf6" onAdd={()=>{}} adding={false}/>
-    <div className="card" style={{padding:'22px'}}>{cases.length<rn&&<div style={{textAlign:'center',padding:'14px 0'}}><p style={{color:'var(--sub)',marginBottom:'12px',fontSize:'.88rem'}}>יש להעלות {rn} קובץ הצגת מקרה</p><UB onUpload={upload} uploading={ul}/><p style={{color:'var(--sub)',fontSize:'.72rem',marginTop:'5px'}}>מקסימום 25MB</p></div>}
+    <div className="card" style={{padding:'22px'}}>{cases.length<rn&&<div style={{textAlign:'center',padding:'14px 0'}}><p style={{color:'var(--sub)',marginBottom:'12px',fontSize:'.88rem'}}>יש להעלות {rn} קובץ הצגת מקרה</p><UB onUpload={upload} uploading={ul} progress={prog}/><p style={{color:'var(--sub)',fontSize:'.72rem',marginTop:'5px'}}>מקסימום 25MB</p></div>}
     {cases.length>0&&<div style={{display:'flex',flexDirection:'column',gap:'7px',marginTop:cases.length<rn?'14px':0}}>{cases.map(c=>(
       <div key={c.id} style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'11px 13px',borderRadius:'9px',background:'rgba(16,185,129,.06)',border:'1px solid rgba(16,185,129,.18)'}}>
         <div><p style={{margin:'0 0 2px',fontWeight:600,fontSize:'.87rem',color:'var(--txt)'}}>{c.name}</p><p style={{margin:0,fontSize:'.73rem',color:'var(--sub)'}}>{c.at?new Date(c.at).toLocaleDateString('he-IL'):''}</p></div>
         <div style={{display:'flex',gap:'6px'}}><a href="#" onClick={e=>{e.preventDefault();openFileUrl(c.url);}} style={{padding:'5px 11px',borderRadius:'7px',background:'#059669',color:'white',fontSize:'.79rem',fontWeight:600,textDecoration:'none',cursor:'pointer'}}>צפה</a><button onClick={()=>{if(confirm('למחוק?'))updateUser({cases:cases.filter(x=>x.id!==c.id)});}} style={{padding:'5px 11px',borderRadius:'7px',background:'rgba(239,68,68,.1)',color:'#ef4444',fontWeight:600,border:'none',cursor:'pointer',fontSize:'.79rem'}}>מחק</button></div>
       </div>
-    ))}{cases.length<rn&&<UB onUpload={upload} uploading={ul} label="העלה קובץ נוסף"/>}</div>}
+    ))}{cases.length<rn&&<UB onUpload={upload} uploading={ul} progress={prog} label="העלה קובץ נוסף"/>}</div>}
     </div></div>);
 }
 
@@ -1501,13 +1493,13 @@ function ProficiencyTests({user,updateUser,req}){
 }
 
 function FinalProject({user,updateUser}){
-  const [ul,setUl]=useState(false);const proj=user.finalProject;
-  const upload=async e=>{const f=e.target.files[0];if(!f)return;const ext3=(f.name.split('.').pop()||'').toLowerCase();if(!['pdf','doc','docx'].includes(ext3)){alert('PDF או Word בלבד');return;}setUl(true);try{const r=await upFile(f,user.id,'final');updateUser({finalProject:r});alert('העבודה הועלתה!');}catch(e){console.error(e);alert('שגיאה בהעלאה: '+(e.message||e.code||String(e)));}setUl(false);e.target.value='';};
+  const [ul,setUl]=useState(false);const [prog,setProg]=useState(null);const proj=user.finalProject;
+  const upload=async e=>{const f=e.target.files[0];if(!f)return;const ext3=(f.name.split('.').pop()||'').toLowerCase();if(!['pdf','doc','docx'].includes(ext3)){alert('PDF או Word בלבד');return;}setUl(true);setProg(0);try{const r=await upFile(f,user.id,'final',p=>setProg(p));updateUser({finalProject:r});alert('העבודה הועלתה!');}catch(e){console.error(e);alert('שגיאה בהעלאה: '+(e.message||e.code||String(e)));}setUl(false);setProg(null);e.target.value='';};
   return(<div><SH title="עבודה מסכמת" sub="העלאת קובץ PDF או Word" done={proj?1:0} total={1} color="#ef4444" onAdd={()=>{}} adding={false}/>
     <div className="card" style={{padding:'26px',textAlign:'center'}}>
-      {!proj?<><p style={{color:'var(--sub)',marginBottom:'14px'}}>טרם הועלתה עבודה מסכמת</p><UB onUpload={upload} uploading={ul}/><p style={{color:'var(--sub)',fontSize:'.72rem',marginTop:'5px'}}>מקסימום 25MB</p></>
+      {!proj?<><p style={{color:'var(--sub)',marginBottom:'14px'}}>טרם הועלתה עבודה מסכמת</p><UB onUpload={upload} uploading={ul} progress={prog}/><p style={{color:'var(--sub)',fontSize:'.72rem',marginTop:'5px'}}>מקסימום 25MB</p></>
       :<><div style={{padding:'13px 15px',borderRadius:'11px',background:'rgba(16,185,129,.07)',border:'1px solid rgba(16,185,129,.2)',marginBottom:'13px',textAlign:'right'}}><p style={{margin:'0 0 2px',fontWeight:700,color:'#059669',fontSize:'.88rem'}}>העבודה הועלתה</p><p style={{margin:'0 0 1px',fontSize:'.87rem',color:'var(--txt)'}}>{proj.name}</p><p style={{margin:0,fontSize:'.75rem',color:'var(--sub)'}}>{proj.at?new Date(proj.at).toLocaleDateString('he-IL'):''}</p></div>
-      <div style={{display:'flex',gap:'9px',justifyContent:'center'}}><a href="#" onClick={e=>{e.preventDefault();openFileUrl(proj.url);}} style={{padding:'8px 17px',borderRadius:'10px',background:'#059669',color:'white',fontSize:'.85rem',fontWeight:600,textDecoration:'none',cursor:'pointer'}}>צפה בעבודה</a><UB onUpload={upload} uploading={ul} label="החלף קובץ"/></div></>}
+      <div style={{display:'flex',gap:'9px',justifyContent:'center'}}><a href="#" onClick={e=>{e.preventDefault();openFileUrl(proj.url);}} style={{padding:'8px 17px',borderRadius:'10px',background:'#059669',color:'white',fontSize:'.85rem',fontWeight:600,textDecoration:'none',cursor:'pointer'}}>צפה בעבודה</a><UB onUpload={upload} uploading={ul} progress={prog} label="החלף קובץ"/></div></>}
     </div></div>);
 }
 
