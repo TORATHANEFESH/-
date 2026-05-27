@@ -670,12 +670,18 @@ function AdminPanel({users,setUsers,adminPw,setAdminPw,teacherPw,setTeacherPw,se
                 <div style={{display:'flex',flexDirection:'column',gap:'10px'}}>
                   <div><label style={{display:'block',fontSize:'.8rem',fontWeight:700,marginBottom:'4px'}}>כותרת *</label><input type="text" value={upForm.title} onChange={e=>setUpForm({...upForm,title:e.target.value})} placeholder="כותרת העדכון" style={{width:'100%',padding:'9px 12px',borderRadius:'9px',border:'2px solid #e5e7eb',fontSize:'.88rem'}}/></div>
                   <div><label style={{display:'block',fontSize:'.8rem',fontWeight:700,marginBottom:'4px'}}>תוכן</label><textarea value={upForm.body} onChange={e=>setUpForm({...upForm,body:e.target.value})} rows={4} placeholder="תוכן העדכון..." style={{width:'100%',padding:'9px 12px',borderRadius:'9px',border:'2px solid #e5e7eb',fontSize:'.88rem',resize:'vertical'}}/></div>
-                  <div><label style={{display:'block',fontSize:'.8rem',fontWeight:700,marginBottom:'4px'}}>קישור / סרטון (אופציונלי)</label><input type="url" value={upForm.url} onChange={e=>setUpForm({...upForm,url:e.target.value})} placeholder="https://..." dir="ltr" style={{width:'100%',padding:'9px 12px',borderRadius:'9px',border:'2px solid #e5e7eb',fontSize:'.88rem'}}/><p style={{margin:'3px 0 0',fontSize:'.72rem',color:'#6b7280'}}>קישורי YouTube יציגו תצוגה מקדימה אוטומטית</p></div>
+                  <div><label style={{display:'block',fontSize:'.8rem',fontWeight:700,marginBottom:'4px'}}>קישור / סרטון (אופציונלי)</label><input type="url" value={upForm.url} onChange={e=>setUpForm({...upForm,url:e.target.value})} placeholder="https://..." dir="ltr" style={{width:'100%',padding:'9px 12px',borderRadius:'9px',border:'2px solid #e5e7eb',fontSize:'.88rem'}}/><p style={{margin:'3px 0 0',fontSize:'.72rem',color:'#6b7280'}}>קישורי YouTube ו-Google Drive יציגו תצוגה מקדימה אוטומטית</p></div>
                   <div><label style={{display:'block',fontSize:'.8rem',fontWeight:700,marginBottom:'4px'}}>פורסם ע"י</label><input type="text" value={upForm.author} onChange={e=>setUpForm({...upForm,author:e.target.value})} style={{width:'100%',padding:'9px 12px',borderRadius:'9px',border:'2px solid #e5e7eb',fontSize:'.88rem'}}/></div>
                   {upForm.url&&getYouTubeId(upForm.url)&&(
                     <div style={{borderRadius:'10px',overflow:'hidden',maxWidth:'320px'}}>
                       <p style={{fontSize:'.78rem',fontWeight:600,color:'#059669',margin:'0 0 5px'}}>תצוגה מקדימה:</p>
                       <img src={`https://img.youtube.com/vi/${getYouTubeId(upForm.url)}/hqdefault.jpg`} alt="preview" style={{width:'100%',borderRadius:'8px'}}/>
+                    </div>
+                  )}
+                  {upForm.url&&getDriveFileId(upForm.url)&&!getYouTubeId(upForm.url)&&(
+                    <div style={{borderRadius:'10px',overflow:'hidden',maxWidth:'320px'}}>
+                      <p style={{fontSize:'.78rem',fontWeight:600,color:'#059669',margin:'0 0 5px'}}>תצוגה מקדימה של Drive:</p>
+                      <iframe src={'https://drive.google.com/file/d/'+getDriveFileId(upForm.url)+'/preview'} style={{width:'100%',height:'200px',border:'none',borderRadius:'8px'}} allow="autoplay"/>
                     </div>
                   )}
                   <button onClick={addUpdate} disabled={savingUp} style={{padding:'10px',borderRadius:'10px',background:'linear-gradient(135deg,#3d5a8a,#7b4fa6)',color:'white',fontWeight:700,border:'none',cursor:'pointer',fontSize:'.88rem',opacity:savingUp?.6:1}}>{savingUp?'מפרסם...':'פרסם עדכון'}</button>
@@ -1584,6 +1590,7 @@ function UpdatesPage({user,updateUser,updates}){
       :updates.map(up=>{
         const isNew=!readUps.includes(up.id);
         const ytId=getYouTubeId(up.url);
+        const driveId=getDriveFileId(up.url);
         return(
           <div key={up.id} className="card" style={{padding:'20px',marginBottom:'14px',borderRight:isNew?'4px solid #ef4444':'4px solid transparent',position:'relative'}}>
             {isNew&&<span style={{position:'absolute',top:'12px',left:'12px',background:'#ef4444',color:'white',padding:'2px 9px',borderRadius:'12px',fontSize:'.7rem',fontWeight:700}}>חדש</span>}
@@ -1604,7 +1611,12 @@ function UpdatesPage({user,updateUser,updates}){
                 </div>
               </div>
             )}
-            {up.url&&!ytId&&(
+            {driveId&&!ytId&&(
+              <div style={{marginBottom:'12px',borderRadius:'12px',overflow:'hidden',maxWidth:'480px'}}>
+                <iframe src={'https://drive.google.com/file/d/'+driveId+'/preview'} style={{width:'100%',height:'300px',border:'none',borderRadius:'12px'}} allow="autoplay"/>
+              </div>
+            )}
+            {up.url&&!ytId&&!driveId&&(
               <a href={up.url} target="_blank" style={{display:'inline-flex',alignItems:'center',gap:'6px',padding:'8px 16px',borderRadius:'9px',background:'linear-gradient(135deg,var(--a1),var(--a2))',color:'white',textDecoration:'none',fontWeight:600,fontSize:'.84rem'}}>
                 פתח קישור
               </a>
