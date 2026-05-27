@@ -222,7 +222,32 @@ async function openFileUrl(url,name){
       const blobUrl=URL.createObjectURL(blob);
       showFilePreview(blobUrl,meta.name||name||'');
     }catch(e){alert('שגיאה בפתיחת הקובץ: '+e.message);}
-  }else{showFilePreview(url,name||'');}
+  }else{
+    const driveId=getDriveFileId(url);
+    if(driveId){showDrivePreview(driveId,name||url);return;}
+    showFilePreview(url,name||'');
+  }
+}
+function getDriveFileId(url){
+  if(!url)return null;
+  const m=url.match(/\/d\/([a-zA-Z0-9_-]+)/)||url.match(/[?&]id=([a-zA-Z0-9_-]+)/);
+  return m?m[1]:null;
+}
+function showDrivePreview(fileId,name){
+  const old=document.getElementById('file-preview-overlay');if(old)old.remove();
+  const ov=document.createElement('div');ov.id='file-preview-overlay';
+  ov.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;';
+  ov.onclick=e=>{if(e.target===ov)ov.remove();};
+  const close=document.createElement('button');
+  close.innerHTML='✕';close.style.cssText='position:fixed;top:18px;right:24px;background:rgba(255,255,255,.95);border:none;width:40px;height:40px;border-radius:50%;font-size:1.3rem;cursor:pointer;z-index:10001;box-shadow:0 2px 8px rgba(0,0,0,.2);';
+  close.onclick=()=>ov.remove();ov.appendChild(close);
+  const ifr=document.createElement('iframe');
+  ifr.src='https://drive.google.com/file/d/'+fileId+'/preview';
+  ifr.style.cssText='width:90vw;height:90vh;border:none;border-radius:12px;background:white;';
+  ifr.setAttribute('allow','autoplay');
+  ov.appendChild(ifr);
+  document.body.appendChild(ov);
+  document.addEventListener('keydown',function esc(e){if(e.key==='Escape'){ov.remove();document.removeEventListener('keydown',esc);}});
 }
 function upFileToFirestore(file,uid,cat,onProgress){
   const MAX_CHUNK=700000;
