@@ -1340,12 +1340,12 @@ function Dashboard({user,setView,req,siteC,unreadCount}){
         </div>
       )}
       {/* HERO */}
-      <div style={{borderRadius:'16px',padding:'28px 36px',
+      <div style={{borderRadius:'16px',padding:'16px 28px',
         background:'linear-gradient(135deg,#1E244B 0%,#524686 40%,#765C74 70%,#A87071 100%)',color:'white'}}>
-        <h2 style={{margin:'0 0 6px',fontSize:'1.5rem',fontWeight:800}}>
+        <h2 style={{margin:'0 0 4px',fontSize:'1.3rem',fontWeight:800}}>
           {(siteC.welcomeTitle||'שלום, {name}!').replace('{name}',user.name)}
         </h2>
-        <p style={{margin:'0 0 16px',opacity:.88,fontSize:'.93rem'}}>
+        <p style={{margin:'0 0 10px',opacity:.88,fontSize:'.88rem'}}>
           {siteC.welcomeSub||'ברוכים הבאים ליומן ההכשרה'} — {yl}
         </p>
         <div style={{display:'flex',gap:'8px',flexWrap:'wrap'}}>
@@ -1384,9 +1384,9 @@ function Dashboard({user,setView,req,siteC,unreadCount}){
       </div>
 
       {/* REQUIREMENTS */}
-      <div style={{borderRadius:'12px',padding:'18px 22px',
+      <div style={{borderRadius:'12px',padding:'12px 18px',
         background:`linear-gradient(135deg,var(--hf),var(--ht))`,color:'white'}}>
-        <h3 style={{margin:'0 0 12px',fontSize:'.93rem',fontWeight:700}}>דרישות {yl}</h3>
+        <h3 style={{margin:'0 0 8px',fontSize:'.9rem',fontWeight:700}}>דרישות {yl}</h3>
         <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(165px,1fr))',gap:'7px'}}>
           {[[req.p||0,'שעות התנסות'],[req.s||0,'הדרכות אישיות'],[req.c||1,`הצגת מקרה${(req.c||1)>1?` (${req.c||1})`:''}`],
             ...(isFem&&(yr===2||yr===3)?[[req.i||0,'שעות משפיעות']]:[]),
