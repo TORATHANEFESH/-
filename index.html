@@ -1711,16 +1711,29 @@ function Contacts({user}){
 
 function Footer({siteC}){
   return(
-    <footer style={{background:'#1E244B',color:'white',padding:'28px 0 20px',marginTop:'40px'}}>
-      <div style={{maxWidth:'1400px',margin:'0 auto',padding:'0 40px',display:'flex',justifyContent:'space-between',alignItems:'center',flexWrap:'wrap',gap:'12px'}}>
-        <div style={{display:'flex',alignItems:'center',gap:'14px'}}>
-          <img src={`data:image/png;base64,${LOGO}`} alt="לוגו" style={{height:'50px',width:'auto',filter:'brightness(10)'}}/>
+    <footer style={{background:'#1E244B',color:'white',padding:'40px 0 24px',marginTop:'40px'}}>
+      <div style={{maxWidth:'1400px',margin:'0 auto',padding:'0 40px'}}>
+        <div className="footer-grid" style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'32px',marginBottom:'28px',alignItems:'start'}}>
+          {/* Brand */}
           <div>
-            <p style={{fontWeight:700,fontSize:'.95rem',margin:0}}>{siteC.title||'מכללת תורת הנפש'}</p>
-            <p style={{color:'#94a3b8',fontSize:'.75rem',margin:0}}>בדרך הבעל שם טוב</p>
+            <img src={`data:image/png;base64,${LOGO}`} alt="לוגו" className="logo-img" style={{height:'70px',width:'auto',marginBottom:'12px'}}/>
+            <p style={{fontWeight:700,fontSize:'1rem',margin:'0 0 4px'}}>{siteC.title||'מכללת תורת הנפש'}</p>
+            <p style={{color:'#94a3b8',fontSize:'.8rem',margin:0}}>בדרך הבעל שם טוב</p>
+          </div>
+          {/* Quick links */}
+          <div>
+            <p style={{fontWeight:700,marginBottom:'12px',fontSize:'.9rem',color:'#cbd5e1'}}>קישורים מהירים</p>
+            <div style={{display:'flex',flexDirection:'column',gap:'6px'}}>
+              {['אודות המכללה','תכנית הלימודים','צוות המרצים'].map(l=>(
+                <span key={l} style={{color:'#94a3b8',fontSize:'.82rem',cursor:'default'}}>{l}</span>
+              ))}
+            </div>
           </div>
         </div>
-        <p style={{color:'#64748b',fontSize:'.77rem',margin:0}}>© {new Date().getFullYear()} מכללת תורת הנפש — כל הזכויות שמורות</p>
+        <div style={{borderTop:'1px solid #334155',paddingTop:'16px',display:'flex',justifyContent:'space-between',alignItems:'center',flexWrap:'wrap',gap:'8px'}}>
+          <p style={{color:'#64748b',fontSize:'.77rem',margin:0}}>© {new Date().getFullYear()} מכללת תורת הנפש — כל הזכויות שמורות</p>
+          <p style={{color:'#475569',fontSize:'.73rem',margin:0}}>יומן תלמיד-ה | מעקב הכשרה</p>
+        </div>
       </div>
     </footer>
   );
