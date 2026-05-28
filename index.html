@@ -76,10 +76,10 @@ body.theme-animated .card{backdrop-filter:blur(10px);}
 .card:hover{box-shadow:0 4px 16px rgba(0,0,0,.09);}
 
 .btn-p{
-  background:linear-gradient(135deg,var(--a1),var(--a2));
+  background:linear-gradient(135deg,#1E244B,#0F3F76);
   color:#fff;border:none;cursor:pointer;transition:opacity .15s,box-shadow .15s;
 }
-.btn-p:hover{opacity:.88;box-shadow:0 3px 10px rgba(30,36,75,.3);}
+.btn-p:hover{opacity:.92;box-shadow:0 3px 12px rgba(30,36,75,.35);}
 
 .nav-tab{
   padding:8px 16px;border-radius:9px;font-weight:600;
@@ -1094,25 +1094,29 @@ function LoginPage({users,setUsers,setCur,onLogo}){
   ];
 
   return(
-    <div style={{minHeight:'100vh',display:'flex',alignItems:'center',justifyContent:'center',padding:'24px',
-      background:'linear-gradient(135deg,#1a1a2e 0%,#16213e 40%,#0f3460 70%,#533483 100%)',
-      position:'relative',overflow:'hidden'}}>
-      {circles.map((s,i)=>(
-        <div key={i} style={{position:'absolute',width:`${s.w}px`,height:`${s.h}px`,
-          top:s.top,bottom:s.bottom,right:s.right,left:s.left,
-          background:s.bg,borderRadius:'50%',
-          animation:`floatA ${s.dur} ${s.del} infinite ease-in-out`,
+    <div style={{minHeight:'100vh',display:'flex',flexDirection:'column',position:'relative',overflow:'hidden'}}>
+      {/* Hero section like official site */}
+      <div style={{background:'linear-gradient(180deg,rgba(30,36,75,0.92) 0%,rgba(15,63,118,0.95) 100%)',
+        minHeight:'100vh',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',
+        padding:'24px',position:'relative'}}>
+        {/* Subtle background pattern */}
+        <div style={{position:'absolute',inset:0,opacity:0.06,
+          backgroundImage:'url("data:image/svg+xml,%3Csvg width=\'60\' height=\'60\' viewBox=\'0 0 60 60\' xmlns=\'http://www.w3.org/2000/svg\'%3E%3Cg fill=\'none\' fill-rule=\'evenodd\'%3E%3Cg fill=\'%23ffffff\' fill-opacity=\'1\'%3E%3Cpath d=\'M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z\'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")',
           pointerEvents:'none',zIndex:0}}/>
-      ))}
 
+        <div style={{textAlign:'center',marginBottom:'28px',position:'relative',zIndex:1}}>
+          <img src={`data:image/png;base64,${LOGO}`} alt="לוגו" className="logo-img" style={{maxWidth:'200px',height:'auto',cursor:'pointer',filter:'brightness(10)'}} onClick={onLogo} onDoubleClick={onLogo}/>
+          <h1 style={{fontSize:'2.2rem',fontWeight:800,color:'#E88F6A',margin:'10px 0 6px',fontFamily:"'Assistant',sans-serif"}}>תורת הנפש</h1>
+          <p style={{color:'rgba(255,255,255,0.85)',fontSize:'1rem',margin:'0 0 4px',fontWeight:600}}>מכללה להתפתחות אישית והכשרת יועצים</p>
+          <p style={{color:'rgba(255,255,255,0.55)',fontSize:'0.85rem',margin:0}}>יומן תלמיד-ה | מעקב הכשרה</p>
+        </div>
 
       <div style={{background:'rgba(255,255,255,0.97)',borderRadius:'20px',padding:'44px 40px',
         maxWidth:'420px',width:'100%',boxShadow:'0 20px 48px rgba(0,0,0,0.35)',
         position:'relative',zIndex:2}}>
-        <div style={{textAlign:'center',marginBottom:'32px'}}>
-          <img src={`data:image/png;base64,${LOGO}`} alt="לוגו" className="logo-img" style={{maxWidth:'260px',height:'auto',cursor:'pointer'}} onClick={onLogo} onDoubleClick={onLogo}/>
-          <h1 style={{fontSize:'1.5rem',fontWeight:800,color:'#1a1a2e',margin:'14px 0 4px'}}>מכללת תורת הנפש</h1>
-          <p style={{color:'#6b7280',fontSize:'0.85rem',margin:0}}>יומן תלמיד-ה | מעקב הכשרה</p>
+        <div style={{textAlign:'center',marginBottom:'24px'}}>
+          <h2 style={{fontSize:'1.2rem',fontWeight:700,color:'#1E244B',margin:'0 0 4px'}}>כניסה למערכת</h2>
+          <p style={{color:'#54595F',fontSize:'0.82rem',margin:0}}>הזינו פרטים כדי להמשיך</p>
         </div>
         <form onSubmit={submit}>
           {reg&&<>
@@ -1195,7 +1199,7 @@ function LoginPage({users,setUsers,setCur,onLogo}){
         </form>
         <div style={{textAlign:'center',marginTop:'16px'}}>
           <button onClick={()=>setReg(!reg)}
-            style={{background:'none',border:'none',color:'#667eea',fontWeight:600,cursor:'pointer',fontSize:'0.9rem'}}>
+            style={{background:'none',border:'none',color:'#E88F6A',fontWeight:600,cursor:'pointer',fontSize:'0.9rem'}}>
             {reg?'יש לי חשבון — כניסה':'אין לי חשבון — הרשמה'}
           </button>
           {!reg&&<><br/>
@@ -1207,6 +1211,7 @@ function LoginPage({users,setUsers,setCur,onLogo}){
             </button>
           </>}
         </div>
+      </div>
       </div>
     </div>
   );
@@ -1227,31 +1232,29 @@ function MainApp({user,updateUser,view,setView,onLogout,onLogo,reqOv,siteC,updat
   ];
   return(
     <div className="app-bg">
-      <header className="app-hdr">
-        <div style={{maxWidth:'1400px',width:'100%',margin:'0 auto',padding:'10px 40px',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
-          {/* Logo + title — spread full width left side */}
+      <header className="app-hdr" style={{borderBottom:'3px solid #E88F6A'}}>
+        <div className="hdr-inner" style={{maxWidth:'1400px',width:'100%',margin:'0 auto',padding:'10px 40px',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
           <div style={{display:'flex',alignItems:'center',gap:'18px'}}>
             <img src={`data:image/png;base64,${LOGO}`} alt="לוגו" className="logo-img"
-              style={{height:'120px',width:'auto',cursor:'pointer'}} onClick={onLogo} onDoubleClick={onLogo}/>
+              style={{height:'90px',width:'auto',cursor:'pointer'}} onClick={onLogo} onDoubleClick={onLogo}/>
             <div style={{borderRight:'2px solid var(--brd)',paddingRight:'18px'}}>
-              <div style={{fontWeight:800,fontSize:'1.1rem',color:'var(--txt)',letterSpacing:'-.01em'}}>
-                {siteC.title||'מכללת תורת הנפש'}
+              <div style={{fontWeight:800,fontSize:'1.15rem',color:'#1E244B',letterSpacing:'-.01em'}}>
+                {siteC.title||'תורת הנפש'}
               </div>
-              <div style={{fontSize:'0.72rem',color:'var(--sub)',marginTop:'2px'}}>
+              <div style={{fontSize:'0.74rem',color:'#E88F6A',marginTop:'2px',fontWeight:600}}>
                 {siteC.subtitle||'יומן תלמיד-ה | מעקב הכשרה'}
               </div>
             </div>
           </div>
-          {/* User info + logout — right side */}
           <div style={{display:'flex',alignItems:'center',gap:'16px'}}>
             <div style={{textAlign:'right'}}>
-              <div style={{fontWeight:700,fontSize:'0.92rem',color:'var(--txt)'}}>{user.name}</div>
-              <div style={{fontSize:'0.73rem',color:'var(--sub)'}}>{yl}</div>
+              <div style={{fontWeight:700,fontSize:'0.92rem',color:'#1E244B'}}>{user.name}</div>
+              <div style={{fontSize:'0.73rem',color:'#54595F'}}>{yl}</div>
             </div>
             <div style={{width:'1px',height:'32px',background:'var(--brd)'}}/>
             <button onClick={onLogout}
-              style={{padding:'8px 18px',borderRadius:'10px',border:'1px solid var(--brd)',
-                background:'transparent',color:'var(--txt)',fontWeight:600,cursor:'pointer',fontSize:'0.83rem'}}>
+              style={{padding:'8px 18px',borderRadius:'10px',border:'1px solid #1E244B',
+                background:'transparent',color:'#1E244B',fontWeight:600,cursor:'pointer',fontSize:'0.83rem'}}>
               יציאה
             </button>
           </div>
@@ -1266,7 +1269,7 @@ function MainApp({user,updateUser,view,setView,onLogout,onLogo,reqOv,siteC,updat
                 background:view===n.id?`linear-gradient(135deg,var(--nf),var(--nt))`:'var(--card)',
                 color:view===n.id?'white':'var(--txt)',
                 border:view===n.id?'none':'1px solid var(--brd)',
-                boxShadow:view===n.id?'0 3px 10px rgba(74,111,165,.3)':'none'
+                boxShadow:view===n.id?'0 3px 10px rgba(30,36,75,.25)':'none'
               }}>
               <span style={{position:'relative'}}>{n.l}{n.id==='updates'&&unreadCount>0&&<span style={{position:'absolute',top:'-8px',left:'-8px',background:'#ef4444',color:'white',borderRadius:'50%',width:'18px',height:'18px',display:'inline-flex',alignItems:'center',justifyContent:'center',fontSize:'.65rem',fontWeight:800,lineHeight:1}}>{unreadCount}</span>}</span>
             </button>
@@ -1690,7 +1693,7 @@ function Contacts({user}){
 
 function Footer({siteC}){
   return(
-    <footer style={{background:'#1e2a3a',color:'white',padding:'40px 0 24px',marginTop:'40px'}}>
+    <footer style={{background:'#1E244B',color:'white',padding:'40px 0 24px',marginTop:'40px'}}>
       <div style={{maxWidth:'1400px',margin:'0 auto',padding:'0 40px'}}>
         <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:'32px',marginBottom:'28px',alignItems:'start'}}>
           {/* Brand */}
