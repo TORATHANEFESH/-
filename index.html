@@ -1117,7 +1117,7 @@ function LoginPage({users,setUsers,setCur,onLogo}){
           pointerEvents:'none',zIndex:0}}/>
 
         <div style={{textAlign:'center',marginBottom:'28px',position:'relative',zIndex:1}}>
-          <img src={`data:image/png;base64,${LOGO}`} alt="לוגו" className="logo-img" style={{maxWidth:'200px',height:'auto',cursor:'pointer'}} onClick={onLogo} onDoubleClick={onLogo}/>
+          <img src={`data:image/png;base64,${LOGO}`} alt="לוגו" className="logo-img" style={{maxWidth:'200px',height:'auto',cursor:'pointer',WebkitMaskImage:'radial-gradient(ellipse 85% 80% at 50% 50%, black 60%, transparent 100%)',maskImage:'radial-gradient(ellipse 85% 80% at 50% 50%, black 60%, transparent 100%)'}} onClick={onLogo} onDoubleClick={onLogo}/>
           <h1 style={{fontSize:'2.2rem',fontWeight:800,color:'#E88F6A',margin:'10px 0 6px',fontFamily:"'Assistant',sans-serif"}}>תורת הנפש</h1>
           <p style={{color:'rgba(255,255,255,0.85)',fontSize:'1rem',margin:'0 0 4px',fontWeight:600}}>מכללה להתפתחות אישית והכשרת יועצים</p>
           <p style={{color:'rgba(255,255,255,0.55)',fontSize:'0.85rem',margin:0}}>יומן תלמיד-ה | מעקב הכשרה</p>
