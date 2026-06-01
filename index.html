@@ -1116,19 +1116,23 @@ function LoginPage({users,setUsers,setCur,onLogo}){
           animation:'dotsFloat 8s ease-in-out infinite alternate',
           pointerEvents:'none',zIndex:0}}/>
 
+        {/* Logo top-right */}
+        <div style={{position:'absolute',top:'20px',right:'24px',zIndex:3}}>
+          <img src={`data:image/png;base64,${LOGO}`} alt="לוגו" className="logo-img" style={{maxWidth:'130px',height:'auto',cursor:'pointer',WebkitMaskImage:'radial-gradient(ellipse 85% 80% at 50% 50%, black 60%, transparent 100%)',maskImage:'radial-gradient(ellipse 85% 80% at 50% 50%, black 60%, transparent 100%)'}} onClick={onLogo} onDoubleClick={onLogo}/>
+        </div>
+
         <div style={{textAlign:'center',marginBottom:'28px',position:'relative',zIndex:1}}>
-          <img src={`data:image/png;base64,${LOGO}`} alt="לוגו" className="logo-img" style={{maxWidth:'200px',height:'auto',cursor:'pointer',WebkitMaskImage:'radial-gradient(ellipse 85% 80% at 50% 50%, black 60%, transparent 100%)',maskImage:'radial-gradient(ellipse 85% 80% at 50% 50%, black 60%, transparent 100%)'}} onClick={onLogo} onDoubleClick={onLogo}/>
-          <h1 style={{fontSize:'2.2rem',fontWeight:800,color:'#E88F6A',margin:'10px 0 6px',fontFamily:"'Assistant',sans-serif"}}>תורת הנפש</h1>
-          <p style={{color:'rgba(255,255,255,0.85)',fontSize:'1rem',margin:'0 0 4px',fontWeight:600}}>מכללה להתפתחות אישית והכשרת יועצים</p>
-          <p style={{color:'rgba(255,255,255,0.55)',fontSize:'0.85rem',margin:0}}>יומן תלמיד-ה | מעקב הכשרה</p>
+          <h1 style={{fontSize:'2.42rem',fontWeight:800,color:'#E88F6A',margin:'0 0 6px',fontFamily:"'Assistant',sans-serif"}}>תורת הנפש</h1>
+          <p style={{color:'rgba(255,255,255,0.85)',fontSize:'1.1rem',margin:'0 0 4px',fontWeight:600}}>מכללה להתפתחות אישית והכשרת יועצים</p>
+          <p style={{color:'rgba(255,255,255,0.55)',fontSize:'0.94rem',margin:0}}>יומן תלמיד-ה | מעקב הכשרה</p>
         </div>
 
       <div style={{background:'rgba(255,255,255,0.97)',borderRadius:'20px',padding:'44px 40px',
         maxWidth:'420px',width:'100%',boxShadow:'0 20px 48px rgba(0,0,0,0.35)',
         position:'relative',zIndex:2}}>
         <div style={{textAlign:'center',marginBottom:'24px'}}>
-          <h2 style={{fontSize:'1.2rem',fontWeight:700,color:'#1E244B',margin:'0 0 4px'}}>כניסה למערכת</h2>
-          <p style={{color:'#54595F',fontSize:'0.82rem',margin:0}}>הזינו פרטים כדי להמשיך</p>
+          <h2 style={{fontSize:'1.32rem',fontWeight:700,color:'#1E244B',margin:'0 0 4px'}}>כניסה למערכת</h2>
+          <p style={{color:'#54595F',fontSize:'0.9rem',margin:0}}>הזינו פרטים כדי להמשיך</p>
         </div>
         <form onSubmit={submit}>
           {reg&&<>
