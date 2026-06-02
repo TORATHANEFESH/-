@@ -1118,9 +1118,8 @@ function LoginPage({users,setUsers,setCur,onLogo}){
           pointerEvents:'none',zIndex:0}}/>
 
         {/* Logo top-right */}
-        <div style={{position:'absolute',top:'16px',right:'20px',zIndex:3,display:'flex',flexDirection:'column',alignItems:'center'}}>
-          <img src={`data:image/png;base64,${LOGO}`} alt="לוגו" className="logo-img" style={{width:'152px',height:'auto',cursor:'pointer',filter:'drop-shadow(0 0 20px rgba(255,255,255,0.15)) drop-shadow(0 0 40px rgba(255,255,255,0.08))'}} onClick={onLogo} onDoubleClick={onLogo}/>
-          <div style={{width:'140px',height:'30px',background:'linear-gradient(to bottom,rgba(255,255,255,0.18),transparent)',borderRadius:'0 0 50% 50%',marginTop:'-6px'}}/>
+        <div style={{position:'absolute',top:'16px',right:'20px',zIndex:3,padding:'0 0 30px 0',background:'radial-gradient(ellipse 80% 70% at 70% 30%, rgba(255,255,255,0.18) 0%, transparent 70%)'}}>
+          <img src={`data:image/png;base64,${LOGO}`} alt="לוגו" className="logo-img" style={{width:'152px',height:'auto',cursor:'pointer'}} onClick={onLogo} onDoubleClick={onLogo}/>
         </div>
 
         <div style={{textAlign:'center',marginBottom:'28px',position:'relative',zIndex:1,marginTop:'120px'}}>
