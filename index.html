@@ -1107,7 +1107,7 @@ function LoginPage({users,setUsers,setCur,onLogo}){
   return(
     <div style={{minHeight:'100vh',display:'flex',flexDirection:'column',position:'relative',overflow:'hidden'}}>
       {/* Hero section like official site */}
-      <div style={{background:'linear-gradient(180deg,#E88F6A 0%,#A87071 25%,#765C74 45%,#524686 65%,#1E244B 100%)',
+      <div style={{background:'linear-gradient(160deg,#1E244B 0%,#524686 35%,#765C74 55%,#A87071 75%,#E88F6A 100%)',
         minHeight:'100vh',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',
         padding:'24px',position:'relative'}}>
         {/* Animated dots background */}
@@ -1119,11 +1119,11 @@ function LoginPage({users,setUsers,setCur,onLogo}){
 
         {/* Logo top-right */}
         <div style={{position:'absolute',top:'16px',right:'20px',zIndex:3}}>
-          <img src={`data:image/png;base64,${LOGO}`} alt="לוגו" className="logo-img" style={{width:'152px',height:'auto',cursor:'pointer',filter:'drop-shadow(0 0 20px rgba(255,255,255,0.15)) drop-shadow(0 0 40px rgba(255,255,255,0.08))'}} onClick={onLogo} onDoubleClick={onLogo}/>
+          <img src={`data:image/png;base64,${LOGO}`} alt="לוגו" className="logo-img" style={{width:'152px',height:'auto',cursor:'pointer',filter:'none'}} onClick={onLogo} onDoubleClick={onLogo}/>
         </div>
 
         <div style={{textAlign:'center',marginBottom:'28px',position:'relative',zIndex:1,marginTop:'120px'}}>
-          <h1 style={{fontSize:'2.42rem',fontWeight:800,color:'#fff',margin:'0 0 6px',fontFamily:"'Assistant',sans-serif",textShadow:'0 2px 8px rgba(0,0,0,0.25)'}}>תורת הנפש</h1>
+          <h1 style={{fontSize:'2.42rem',fontWeight:800,color:'#E88F6A',margin:'0 0 6px',fontFamily:"'Assistant',sans-serif"}}>תורת הנפש</h1>
           <p style={{color:'rgba(255,255,255,0.85)',fontSize:'1.1rem',margin:'0 0 4px',fontWeight:600}}>מכללה להתפתחות אישית והכשרת יועצים</p>
           <p style={{color:'rgba(255,255,255,0.55)',fontSize:'0.94rem',margin:0}}>יומן תלמיד-ה | מעקב הכשרה</p>
         </div>
