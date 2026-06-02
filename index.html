@@ -1107,7 +1107,7 @@ function LoginPage({users,setUsers,setCur,onLogo}){
   return(
     <div style={{minHeight:'100vh',display:'flex',flexDirection:'column',position:'relative',overflow:'hidden'}}>
       {/* Hero section like official site */}
-      <div style={{background:'linear-gradient(160deg,#1E244B 0%,#524686 35%,#765C74 55%,#A87071 75%,#E88F6A 100%)',
+      <div style={{background:'linear-gradient(180deg,#E88F6A 0%,#A87071 25%,#765C74 45%,#524686 65%,#1E244B 100%)',
         minHeight:'100vh',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',
         padding:'24px',position:'relative'}}>
         {/* Animated dots background */}
@@ -1118,8 +1118,8 @@ function LoginPage({users,setUsers,setCur,onLogo}){
           pointerEvents:'none',zIndex:0}}/>
 
         {/* Logo top-right */}
-        <div style={{position:'absolute',top:'16px',right:'20px',zIndex:3,background:'rgba(255,255,255,0.12)',borderRadius:'14px',padding:'8px 10px',backdropFilter:'blur(4px)'}}>
-          <img src={`data:image/png;base64,${LOGO}`} alt="לוגו" className="logo-img" style={{width:'152px',height:'auto',cursor:'pointer',filter:'drop-shadow(0 1px 3px rgba(255,255,255,0.2))'}} onClick={onLogo} onDoubleClick={onLogo}/>
+        <div style={{position:'absolute',top:'16px',right:'20px',zIndex:3}}>
+          <img src={`data:image/png;base64,${LOGO}`} alt="לוגו" className="logo-img" style={{width:'152px',height:'auto',cursor:'pointer'}} onClick={onLogo} onDoubleClick={onLogo}/>
         </div>
 
         <div style={{textAlign:'center',marginBottom:'28px',position:'relative',zIndex:1,marginTop:'120px'}}>
