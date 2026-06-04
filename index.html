@@ -168,7 +168,7 @@ const INST={
     {name:'רחלי אלפסי',wa:'0544652415'},
     {name:'חגית גרון',wa:'0556897708'},
     {name:'ריקי שפירא',wa:'0526071775'},
-    {name:'שולמית',wa:'0502105662'}
+    {name:'שולמית בן חור',wa:'0502105662'}
   ],
   male:[
     {name:'הרב מנחם בן שחר',wa:'0584829829'},
@@ -439,7 +439,6 @@ function AdminStudentDetail({uid,users,setUsers,onClose}){
     {id:'practical',l:`התנסות (${(u.practical||[]).length})`},
     {id:'supervision',l:`הדרכות (${(u.supervision||[]).length})`},
     {id:'cases',l:`הצגות מקרה (${(u.cases||[]).length})`},
-    {id:'impact',l:`משפיעות (${(u.impact||[]).length})`},
     {id:'proficiency',l:`בקיאות (${(u.proficiency||[]).length})`},
     {id:'final',l:'עבודה מסכמת'},
   ];
@@ -481,15 +480,6 @@ function AdminStudentDetail({uid,users,setUsers,onClose}){
           <div key={c.id||i} style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'11px 14px',borderRadius:'9px',background:'rgba(139,92,246,.05)',border:'1px solid rgba(139,92,246,.15)',marginBottom:'7px'}}>
             <div><p style={{margin:'0 0 2px',fontWeight:600,fontSize:'.87rem',color:'#374151'}}>{c.name}</p><p style={{margin:0,fontSize:'.73rem',color:'#9ca3af'}}>{c.at?new Date(c.at).toLocaleDateString('he-IL'):''}</p></div>
             <div style={{display:'flex',gap:'6px'}}><a href="#" onClick={e=>{e.preventDefault();openFileUrl(c.url,c.name);}} style={{padding:'4px 10px',borderRadius:'7px',background:'#524686',color:'white',fontSize:'.78rem',fontWeight:600,textDecoration:'none',cursor:'pointer'}}>פתח</a><DelBtn onClick={()=>delItem('cases',i)}/></div>
-          </div>
-        )))}
-        {tab==='impact'&&(!(u.impact||[]).length?<Empty/>:(u.impact||[]).map((h,i)=>(
-          <div key={h.id||i} style={{borderRadius:'10px',border:'1px solid #e5e7eb',marginBottom:'8px',overflow:'hidden'}}>
-            <div style={{background:'#ecfeff',padding:'8px 13px',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
-              <span style={{fontWeight:700,fontSize:'.85rem',color:'#0e7490'}}>#{i+1} — {h.who}{h.date?` | ${new Date(h.date).toLocaleDateString('he-IL')}`:''}</span>
-              <DelBtn onClick={()=>delItem('impact',i)}/>
-            </div>
-            <div style={{padding:'11px 13px'}}><FB label="נושא" value={h.topic}/><FB label="מה קיבלתי" value={h.learning}/></div>
           </div>
         )))}
         {tab==='proficiency'&&(!(u.proficiency||[]).length?<Empty/>:(u.proficiency||[]).map((t,i)=>(
@@ -793,7 +783,6 @@ function TeacherStudentDetail({u,stuUploads,setUploads}){
     {id:'practical',l:`התנסות (${(u.practical||[]).length})`},
     {id:'supervision',l:`הדרכות (${(u.supervision||[]).length})`},
     {id:'cases',l:`הצגות מקרה (${(u.cases||[]).length})`},
-    {id:'impact',l:`משפיעות (${(u.impact||[]).length})`},
     {id:'proficiency',l:`בקיאות (${(u.proficiency||[]).length})`},
     {id:'final',l:'עבודה מסכמת'},
     {id:'files',l:`קבצים (${stuUploads.length})`},
@@ -816,7 +805,7 @@ function TeacherStudentDetail({u,stuUploads,setUploads}){
       {tab==='overview'&&(
         <div>
           <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(120px,1fr))',gap:'8px',marginBottom:'14px'}}>
-            {[['התנסות',(u.practical||[]).length,'#1E244B','practical'],['הדרכות',(u.supervision||[]).length,'#524686','supervision'],['הצגות מקרה',(u.cases||[]).length,'#765C74','cases'],['משפיעות',(u.impact||[]).length,'#A87071','impact'],['בקיאות',(u.proficiency||[]).length,'#C4896E','proficiency']].map(([l,n,col,tid])=>(
+            {[['התנסות',(u.practical||[]).length,'#1E244B','practical'],['הדרכות',(u.supervision||[]).length,'#524686','supervision'],['הצגות מקרה',(u.cases||[]).length,'#765C74','cases'],['בקיאות',(u.proficiency||[]).length,'#C4896E','proficiency']].map(([l,n,col,tid])=>(
               <div key={l} style={{padding:'10px',borderRadius:'9px',background:col+'15',borderRight:`3px solid ${col}`,cursor:'pointer'}} onClick={()=>setTab(tid)}>
                 <p style={{margin:'0 0 2px',fontSize:'.7rem',color:'#6b7280',fontWeight:600}}>{l}</p>
                 <p style={{margin:0,fontSize:'1.4rem',fontWeight:800,color:col,lineHeight:1}}>{n}</p>
@@ -884,22 +873,6 @@ function TeacherStudentDetail({u,stuUploads,setUploads}){
         </div>
       )}
 
-      {tab==='impact'&&(
-        <div>
-          {!(u.impact||[]).length?<EmptyMsg t="טרם דווחו שעות משפיעות"/>:
-          (u.impact||[]).map((h,i)=>(
-            <SectionCard key={h.id||i} bg="#ecfeff" header={
-              <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
-                <span style={{fontWeight:700,fontSize:'.85rem',color:'#0e7490'}}>#{i+1} — {h.who}</span>
-                <span style={{fontSize:'.78rem',color:'#6b7280'}}>{h.date?new Date(h.date).toLocaleDateString('he-IL'):''}</span>
-              </div>
-            }>
-              <FieldBlock label="נושא" value={h.topic}/>
-              <FieldBlock label="מה קיבלתי" value={h.learning}/>
-            </SectionCard>
-          ))}
-        </div>
-      )}
 
       {tab==='proficiency'&&(
         <div>
@@ -1242,7 +1215,6 @@ function MainApp({user,updateUser,view,setView,onLogout,onLogo,reqOv,siteC,updat
   const nav=[
     {id:'dashboard',l:'סקירה'},{id:'practical',l:'שעות התנסות'},
     {id:'supervision',l:'הדרכות אישיות'},{id:'case',l:'הצגת מקרה'},
-    ...(isFem&&(yr===2||yr===3)?[{id:'impact',l:'שעות משפיעות'}]:[]),
     ...(isFem&&yr===4?[{id:'proficiency',l:'מבחני בקיאות'},{id:'finalwork',l:'עבודה מסכמת'}]:[]),
     {id:'updates',l:'עדכונים'},
     {id:'contacts',l:'אנשי קשר'},
@@ -1299,7 +1271,6 @@ function MainApp({user,updateUser,view,setView,onLogout,onLogo,reqOv,siteC,updat
         {view==='practical'&&<PracticalHours user={user} updateUser={updateUser} req={req}/>}
         {view==='supervision'&&<SupervisionHours user={user} updateUser={updateUser} req={req}/>}
         {view==='case'&&<CasePresentation user={user} updateUser={updateUser} req={req}/>}
-        {view==='impact'&&<ImpactHours user={user} updateUser={updateUser} req={req}/>}
         {view==='proficiency'&&<ProficiencyTests user={user} updateUser={updateUser} req={req}/>}
         {view==='finalwork'&&<FinalProject user={user} updateUser={updateUser}/>}
         {view==='updates'&&<UpdatesPage user={user} updateUser={updateUser} updates={updates}/>}
@@ -1333,7 +1304,6 @@ function Dashboard({user,setView,req,siteC,unreadCount}){
     {id:'practical',l:'שעות התנסות',done:(user.practical||[]).length,req:req.p||0,c:'#1E244B'},
     {id:'supervision',l:'הדרכות אישיות',done:(user.supervision||[]).length,req:req.s||0,c:'#524686'},
     {id:'case',l:'הצגת מקרה',done:(user.cases||[]).length,req:req.c||1,c:'#765C74'},
-    ...(isFem&&(yr===2||yr===3)?[{id:'impact',l:'שעות משפיעות',done:(user.impact||[]).length,req:req.i||0,c:'#A87071'}]:[]),
     ...(isFem&&yr===4?[
       {id:'proficiency',l:'מבחני בקיאות',done:(user.proficiency||[]).length,req:req.pr||2,c:'#C4896E'},
       {id:'finalwork',l:'עבודה מסכמת',done:user.finalProject?1:0,req:1,c:'#E88F6A'},
@@ -1397,7 +1367,6 @@ function Dashboard({user,setView,req,siteC,unreadCount}){
         <h3 style={{margin:'0 0 8px',fontSize:'.9rem',fontWeight:700}}>דרישות {yl}</h3>
         <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(165px,1fr))',gap:'7px'}}>
           {[[req.p||0,'שעות התנסות'],[req.s||0,'הדרכות אישיות'],[req.c||1,`הצגת מקרה${(req.c||1)>1?` (${req.c||1})`:''}`],
-            ...(isFem&&(yr===2||yr===3)?[[req.i||0,'שעות משפיעות']]:[]),
             ...(isFem&&yr===4?[[req.pr||2,'מבחני בקיאות'],['✓','עבודה מסכמת']]:[])
           ].map(([n,l])=>(
             <div key={l} style={{padding:'9px 13px',background:'rgba(255,255,255,0.14)',borderRadius:'9px',display:'flex',alignItems:'center',gap:'7px'}}>
@@ -1417,8 +1386,7 @@ function Dashboard({user,setView,req,siteC,unreadCount}){
               <p style={{margin:'0 0 5px',fontWeight:700,fontSize:'.87rem',color:'var(--txt)'}}>{YL[h.year]||`שנה ${h.year}`}{h.at?` — ${new Date(h.at).toLocaleDateString('he-IL')}`:''}</p>
               <div style={{display:'flex',gap:'12px',flexWrap:'wrap',fontSize:'.79rem',color:'var(--sub)'}}>
                 <span>התנסות: <b>{h.practical||0}</b></span><span>הדרכות: <b>{h.supervision||0}</b></span>
-                <span>הצגות: <b>{h.cases||0}</b></span>{h.impact!=null&&<span>משפיעות: <b>{h.impact}</b></span>}
-              </div>
+                <span>הצגות: <b>{h.cases||0}</b></span>              </div>
             </div>
           ))}
         </div>
@@ -1591,23 +1559,6 @@ function CasePresentation({user,updateUser,req}){
       </div>
     ))}{cases.length<rn&&<UB onUpload={upload} uploading={ul} progress={prog} label="העלה קובץ נוסף"/>}</div>}
     </div></div>);
-}
-
-function ImpactHours({user,updateUser,req}){
-  const [f,setF]=useState({date:'',topic:'',learning:'',who:''});const hours=user.impact||[];const rn=req.i||0;
-  const add=()=>{if(!f.date||!f.topic||!f.learning||!f.who){alert('נא למלא הכל');return;}updateUser({impact:[...hours,{id:Date.now(),...f}]});setF({date:'',topic:'',learning:'',who:''});alert('שעה נוספה');};
-  return(<div><SH title="שעות משפיעות" sub={`${hours.length} / ${rn} שעות`} done={hours.length} total={rn} color="#A87071" onAdd={()=>{}} adding={false}/>
-    <div className="card" style={{padding:'20px',marginBottom:'12px'}}>
-      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'11px',marginBottom:'11px'}}>
-        <FL label="תאריך"><input type="date" value={f.date} onChange={e=>setF({...f,date:e.target.value})}/></FL>
-        <FL label="שם המשפיע/ה"><input type="text" value={f.who} onChange={e=>setF({...f,who:e.target.value})}/></FL>
-      </div>
-      <FL label="נושא"><input type="text" value={f.topic} onChange={e=>setF({...f,topic:e.target.value})} style={{marginBottom:'11px'}}/></FL>
-      <FL label="מה קיבלתי"><textarea value={f.learning} onChange={e=>setF({...f,learning:e.target.value})} rows={3} style={{resize:'vertical'}}/></FL>
-      <button onClick={add} className="btn-p" style={{width:'100%',padding:'10px',borderRadius:'10px',fontWeight:700,marginTop:'11px',border:'none',cursor:'pointer'}}>הוסף שעה</button>
-    </div>
-    {hours.map((h,i)=>(<div key={h.id} className="card" style={{padding:'13px',marginBottom:'7px'}}><div style={{display:'flex',justifyContent:'space-between'}}><span style={{fontWeight:700,fontSize:'.82rem',color:'var(--txt)'}}>#{i+1} — {h.date?new Date(h.date).toLocaleDateString('he-IL'):''} | {h.who}</span><button onClick={()=>updateUser({impact:hours.filter(x=>x.id!==h.id)})} style={{background:'none',border:'none',color:'#ef4444',cursor:'pointer',fontSize:'.79rem',fontWeight:600}}>מחק</button></div><p style={{margin:'4px 0 1px',fontWeight:600,fontSize:'.85rem',color:'var(--txt)'}}>{h.topic}</p><p style={{margin:0,fontSize:'.81rem',color:'var(--sub)'}}>{h.learning}</p></div>))}
-  </div>);
 }
 
 function ProficiencyTests({user,updateUser,req}){
