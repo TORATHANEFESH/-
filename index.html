@@ -1053,8 +1053,6 @@ function LoginPage({users,setUsers,setCur,onLogo}){
   const [reg,setReg]=useState(false);
   const [form,setForm]=useState({name:'',year:'2',gender:'female',email:'',pw:''});
   const [loading,setLoading]=useState(false);
-  const [showAppleModal,setShowAppleModal]=useState(false);
-  const isStandalone=window.matchMedia('(display-mode: standalone)').matches||!!window.navigator.standalone;
 
   const submit=async e=>{
     e.preventDefault();setLoading(true);
@@ -1212,61 +1210,7 @@ function LoginPage({users,setUsers,setCur,onLogo}){
       </div>
       </div>
 
-      {/* ── Install banner ── */}
-      {!isStandalone&&(
-        <div style={{position:'fixed',bottom:0,left:0,right:0,
-          background:'rgba(18,22,52,0.97)',backdropFilter:'blur(12px)',
-          padding:'10px 16px',display:'flex',alignItems:'center',justifyContent:'center',
-          gap:'10px',zIndex:1000,borderTop:'1px solid rgba(255,255,255,0.1)',flexWrap:'wrap'}}>
-          <span style={{color:'rgba(255,255,255,0.65)',fontSize:'0.82rem',whiteSpace:'nowrap'}}>📲 התקן כאפליקציה:</span>
-          <a href="https://github.com/TORATHANEFESH/-/raw/main/torathanefesh.apk"
-            style={{background:'#22c55e',color:'white',borderRadius:'8px',padding:'6px 16px',
-              fontSize:'0.83rem',fontWeight:700,textDecoration:'none',display:'inline-flex',alignItems:'center',gap:'5px'}}>
-            🤖 Android APK
-          </a>
-          <button onClick={()=>setShowAppleModal(true)} style={{background:'rgba(255,255,255,0.1)',color:'white',
-            borderRadius:'8px',padding:'6px 16px',fontSize:'0.83rem',fontWeight:700,
-            border:'1px solid rgba(255,255,255,0.2)',cursor:'pointer',display:'inline-flex',alignItems:'center',gap:'5px',
-            fontFamily:"'Assistant',sans-serif"}}>
-             משתמשי Apple
-          </button>
-        </div>
-      )}
 
-      {/* ── Apple modal ── */}
-      {showAppleModal&&(
-        <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.72)',display:'flex',
-          alignItems:'center',justifyContent:'center',zIndex:2000,padding:'20px'}}
-          onClick={()=>setShowAppleModal(false)}>
-          <div style={{background:'white',borderRadius:'22px',padding:'28px 22px',
-            maxWidth:'350px',width:'100%',textAlign:'center',position:'relative'}}
-            onClick={e=>e.stopPropagation()}>
-            <button onClick={()=>setShowAppleModal(false)} style={{position:'absolute',top:'12px',
-              left:'14px',background:'#f3f4f6',border:'none',borderRadius:'50%',width:'28px',height:'28px',
-              cursor:'pointer',fontSize:'0.9rem',color:'#6b7280',display:'flex',alignItems:'center',justifyContent:'center'}}>✕</button>
-            <div style={{fontSize:'2.8rem',marginBottom:'6px'}}>🍎</div>
-            <h3 style={{color:'#1E244B',fontSize:'1.1rem',fontWeight:800,margin:'0 0 18px'}}>התקנה על iPhone / iPad</h3>
-            <div style={{textAlign:'right',display:'flex',flexDirection:'column',gap:'13px'}}>
-              {[
-                ['1️⃣','פתחו את האתר בדפדפן Safari (לא Chrome)'],
-                ['2️⃣','לחצו על כפתור השיתוף ⬆️ בתחתית המסך'],
-                ['3️⃣','גללו למטה ובחרו "הוסף למסך הבית"'],
-                ['4️⃣','לחצו "הוסף" — תופיע אפליקציה עם אייקון!'],
-              ].map(([n,t])=>(
-                <div key={n} style={{display:'flex',alignItems:'flex-start',gap:'10px'}}>
-                  <span style={{fontSize:'1.15rem',flexShrink:0}}>{n}</span>
-                  <p style={{color:'#374151',fontSize:'0.88rem',margin:0,lineHeight:1.5}}>{t}</p>
-                </div>
-              ))}
-            </div>
-            <div style={{marginTop:'18px',padding:'11px 14px',background:'#f0f9ff',borderRadius:'10px'}}>
-              <p style={{color:'#0369a1',fontSize:'0.82rem',margin:0,fontWeight:600}}>
-                💡 נראה ומרגיש בדיוק כמו אפליקציה רגילה — ללא App Store!
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
 
     </div>
   );
@@ -1742,6 +1686,51 @@ function Contacts({user}){
 }
 
 
+function AppleInstallButton(){
+  const [show,setShow]=useState(false);
+  return(<>
+    <button onClick={()=>setShow(true)} style={{background:'rgba(255,255,255,0.1)',color:'white',
+      borderRadius:'8px',padding:'6px 16px',fontSize:'0.82rem',fontWeight:700,
+      border:'1px solid rgba(255,255,255,0.2)',cursor:'pointer',
+      fontFamily:"'Assistant',sans-serif"}}>
+       משתמשי Apple
+    </button>
+    {show&&(
+      <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.72)',display:'flex',
+        alignItems:'center',justifyContent:'center',zIndex:2000,padding:'20px'}}
+        onClick={()=>setShow(false)}>
+        <div style={{background:'white',borderRadius:'22px',padding:'28px 22px',
+          maxWidth:'350px',width:'100%',textAlign:'center',position:'relative'}}
+          onClick={e=>e.stopPropagation()}>
+          <button onClick={()=>setShow(false)} style={{position:'absolute',top:'12px',
+            left:'14px',background:'#f3f4f6',border:'none',borderRadius:'50%',width:'28px',height:'28px',
+            cursor:'pointer',fontSize:'0.9rem',color:'#6b7280',display:'flex',alignItems:'center',justifyContent:'center'}}>✕</button>
+          <div style={{fontSize:'2.8rem',marginBottom:'6px'}}>🍎</div>
+          <h3 style={{color:'#1E244B',fontSize:'1.1rem',fontWeight:800,margin:'0 0 18px'}}>התקנה על iPhone / iPad</h3>
+          <div style={{textAlign:'right',display:'flex',flexDirection:'column',gap:'13px'}}>
+            {[
+              ['1️⃣','פתחו את האתר בדפדפן Safari (לא Chrome)'],
+              ['2️⃣','לחצו על כפתור השיתוף ⬆️ בתחתית המסך'],
+              ['3️⃣','גללו למטה ובחרו "הוסף למסך הבית"'],
+              ['4️⃣','לחצו "הוסף" — תופיע אפליקציה עם אייקון!'],
+            ].map(([n,t])=>(
+              <div key={n} style={{display:'flex',alignItems:'flex-start',gap:'10px'}}>
+                <span style={{fontSize:'1.15rem',flexShrink:0}}>{n}</span>
+                <p style={{color:'#374151',fontSize:'0.88rem',margin:0,lineHeight:1.5}}>{t}</p>
+              </div>
+            ))}
+          </div>
+          <div style={{marginTop:'18px',padding:'11px 14px',background:'#f0f9ff',borderRadius:'10px'}}>
+            <p style={{color:'#0369a1',fontSize:'0.82rem',margin:0,fontWeight:600}}>
+              💡 נראה ומרגיש בדיוק כמו אפליקציה רגילה — ללא App Store!
+            </p>
+          </div>
+        </div>
+      </div>
+    )}
+  </>);
+}
+
 function Footer({siteC}){
   return(
     <footer style={{background:'#1E244B',color:'white',padding:'40px 0 24px',marginTop:'40px'}}>
@@ -1764,6 +1753,16 @@ function Footer({siteC}){
               ))}
             </div>
           </div>
+        </div>
+        {/* Install bar */}
+        <div style={{borderTop:'1px solid #334155',paddingTop:'16px',marginBottom:'14px',display:'flex',alignItems:'center',justifyContent:'center',gap:'10px',flexWrap:'wrap'}}>
+          <span style={{color:'#94a3b8',fontSize:'0.82rem'}}>📲 התקן כאפליקציה:</span>
+          <a href="https://github.com/TORATHANEFESH/-/raw/main/torathanefesh.apk"
+            style={{background:'#22c55e',color:'white',borderRadius:'8px',padding:'6px 16px',
+              fontSize:'0.82rem',fontWeight:700,textDecoration:'none',display:'inline-flex',alignItems:'center',gap:'5px'}}>
+            🤖 Android APK
+          </a>
+          <AppleInstallButton/>
         </div>
         <div style={{borderTop:'1px solid #334155',paddingTop:'16px',display:'flex',justifyContent:'space-between',alignItems:'center',flexWrap:'wrap',gap:'8px'}}>
           <p style={{color:'#64748b',fontSize:'.77rem',margin:0}}>© {new Date().getFullYear()} מכללת תורת הנפש — כל הזכויות שמורות</p>
