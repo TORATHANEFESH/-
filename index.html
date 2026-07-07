@@ -164,7 +164,7 @@ const THEMES={
 };
 
 const DEF_REQ={
-  male:{2:{p:20,s:6,c:1},3:{p:30,s:8,c:1}},
+  male:{2:{p:20,s:6,c:1},3:{p:30,s:8,c:1},4:{p:40,s:10,c:2,fp:true}},
   female:{2:{p:20,s:6,c:1,i:10},3:{p:30,s:8,c:1,i:10},4:{p:40,s:10,c:2,pr:2,fp:true}}
 };
 
@@ -184,11 +184,72 @@ const INST={
     {name:'הרב אפרים ארנברג',wa:'0523376656'}
   ]
 };
+// מדריכי הצגת מקרה — רשימה משותפת לכולם (שונה ממדריכי ההדרכות האישיות)
+const CASE_INST=[
+  {name:'הרב חיים נתיב'},
+  {name:'הרב איציק שפירא'},
+  {name:'הרב נעם שפירא'},
+  {name:'הרב אפרים ארנברג'},
+  {name:'הרב מנחם בן שחר'}
+];
 
 function gReq(g,y,ov){
   const b=((DEF_REQ[g]||{})[parseInt(y)])||{};
   const o=(((ov||{})[g]||{})[parseInt(y)])||{};
   return{p:b.p,s:b.s,c:b.c,i:b.i,pr:b.pr,fp:b.fp,...o};
+}
+// ── שיוך דיווחים לשנה ── רשומה "שייכת" לשנה הנוכחית אם תויגה בה, או שאין לה תיוג (רשומה ישנה מלפני העדכון)
+function inYr(r,y){return !!r&&(r.yr===undefined||r.yr===null||String(r.yr)===String(y));}
+function curRecs(arr,y){return (arr||[]).filter(r=>inYr(r,y));}
+function pastRecs(arr,y){return (arr||[]).filter(r=>!inYr(r,y));}
+// ── מעבר שנה אוטומטי לפי תאריך ── השנה האקדמית מתחלפת ב-15 ביולי
+function acadYear(d){d=d||new Date();const y=d.getFullYear();return d>=new Date(y,6,15)?y:y-1;}
+function maxLevel(g){return 4;}
+function trackYears(g){return ['2','3','4'];}
+// השנה הנוכחית האפקטיבית של התלמידה: רמת הכניסה + מספר ה-15/7 שחלפו, עד המקסימום למסלול
+function computedYear(u){
+  const sl=parseInt(u.startLevel),sy=parseInt(u.startYYYY);
+  if(!sl||!sy)return parseInt(u.year)||2;
+  return Math.min(maxLevel(u.gender),Math.max(sl,sl+(acadYear()-sy)));
+}
+// מחיל מעבר שנה אוטומטי: נועל דיווחים לשנה שהסתיימה ומקדם את הרמה. מחזיר את אותו אובייקט אם אין שינוי.
+function applyAutoAdvance(u){
+  if(!u||!u.gender)return u;
+  const cy=computedYear(u),sy=parseInt(u.year)||cy;
+  if(cy<=sy)return u;
+  const stamp=arr=>(arr||[]).map(r=>(r.yr===undefined||r.yr===null)?{...r,yr:String(sy)}:r);
+  const practical=stamp(u.practical),supervision=stamp(u.supervision),cases=stamp(u.cases),proficiency=stamp(u.proficiency);
+  const cnt=(arr,y)=>(arr||[]).filter(r=>String(r.yr)===String(y)).length;
+  const hist=[...(u.yearHistory||[])];
+  for(let y=sy;y<cy;y++){
+    if(!hist.find(h=>String(h.year)===String(y)))hist.push({year:String(y),at:new Date().toISOString(),practical:cnt(practical,y),supervision:cnt(supervision,y),cases:cnt(cases,y),proficiency:cnt(proficiency,y)});
+  }
+  return {...u,year:String(cy),practical,supervision,cases,proficiency,yearHistory:hist};
+}
+// רשימת ארכיון לקריאה בלבד של דיווחים משנים קודמות
+function ArchiveList({recs,label,preview}){
+  const [open,setOpen]=useState(false);
+  if(!recs||!recs.length)return null;
+  const byYr={};recs.forEach(r=>{const k=String(r.yr);(byYr[k]=byYr[k]||[]).push(r);});
+  return(<div style={{marginTop:'16px'}}>
+    <button onClick={()=>setOpen(!open)} style={{width:'100%',padding:'11px 14px',borderRadius:'10px',background:'rgba(0,0,0,.04)',border:'1px solid var(--brd)',cursor:'pointer',fontWeight:700,fontSize:'.85rem',color:'var(--sub)',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+      <span>📁 דיווחים משנים קודמות ({recs.length})</span><span>{open?'▲':'▼'}</span>
+    </button>
+    {open&&Object.keys(byYr).sort().map(y=>(
+      <div key={y} style={{marginTop:'10px'}}>
+        <p style={{margin:'0 0 6px',fontWeight:700,fontSize:'.82rem',color:'var(--txt)'}}>{YL[y]||`שנה ${y}`}</p>
+        {byYr[y].map(r=>(
+          <div key={r.id} className="card" style={{padding:'11px 13px',marginBottom:'6px',opacity:.85}}>
+            <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:'8px'}}>
+              <span style={{fontWeight:700,fontSize:'.83rem',color:'var(--txt)'}}>{label(r)}</span>
+              <span style={{fontSize:'.75rem',color:'var(--sub)',whiteSpace:'nowrap'}}>{r.date?new Date(r.date).toLocaleDateString('he-IL'):''}</span>
+            </div>
+            {preview&&preview(r)&&<p style={{margin:'5px 0 0',fontSize:'.8rem',color:'var(--sub)',lineHeight:1.5,whiteSpace:'pre-wrap'}}>{preview(r)}</p>}
+          </div>
+        ))}
+      </div>
+    ))}
+  </div>);
 }
 function dataURLtoBlob(dataURL){
   const parts=dataURL.split(',');const mime=parts[0].match(/:(.*?);/)[1];
@@ -353,7 +414,7 @@ function App(){
       }
     }).catch(console.error);
     db.collection('users').get().then(s=>{
-      const a=[];s.forEach(d=>a.push({id:d.id,...d.data()}));setUsers(a);
+      const a=[];s.forEach(d=>a.push(applyAutoAdvance({id:d.id,...d.data()})));setUsers(a);
     }).catch(console.error);
     db.collection('updates').orderBy('createdAt','desc').get().then(s=>{
       const a=[];s.forEach(d=>a.push({id:d.id,...d.data()}));setUpdates(a);
@@ -367,6 +428,15 @@ function App(){
       else localStorage.removeItem('cur_user');
     }catch(e){}
   },[cur]);
+  // מעבר שנה אוטומטי לתלמידה המחוברת (מתבצע בכניסה)
+  useEffect(()=>{
+    if(!cur||!cur.id)return;
+    const adv=applyAutoAdvance(cur);
+    if(adv!==cur){
+      setCur(adv);
+      db.collection('users').doc(cur.id).update({year:adv.year,practical:adv.practical,supervision:adv.supervision,cases:adv.cases,proficiency:adv.proficiency,yearHistory:adv.yearHistory}).catch(console.error);
+    }
+  },[cur&&cur.id]);
   useEffect(()=>{
     if(users.length>0) users.forEach(u=>db.collection('users').doc(u.id).set(u).catch(console.error));
   },[users]);
@@ -520,6 +590,25 @@ function AdminPanel({users,setUsers,adminPw,setAdminPw,teacherPw,setTeacherPw,se
   const [addingUp,setAddingUp]=useState(false);
   const [savingUp,setSavingUp]=useState(false);
   const [editingUp,setEditingUp]=useState(null);
+  const [reqFileInfo,setReqFileInfo]=useState(null);
+  const [reqUl,setReqUl]=useState(false);
+  useEffect(()=>{db.collection('settings').doc('siteContent').get().then(d=>{if(d.exists){const c=d.data().content||{};setReqFileInfo(c.caseReqFile||null);}}).catch(()=>{});},[]);
+  const uploadReqFile=async e=>{
+    const f=e.target.files[0];if(!f)return;
+    const ext=(f.name.split('.').pop()||'').toLowerCase();
+    if(!['pdf','doc','docx'].includes(ext)){alert('PDF או Word בלבד');return;}
+    setReqUl(true);
+    try{
+      const r=await upFile(f,'admin','requirements',()=>{});
+      const doc=await db.collection('settings').doc('siteContent').get();
+      const c=(doc.exists&&doc.data().content)||{};
+      c.caseReqFile={url:r.url,name:r.name,at:r.at};
+      await db.collection('settings').doc('siteContent').set({content:c},{merge:true});
+      setReqFileInfo(c.caseReqFile);
+      alert('קובץ הדרישות הועלה. התלמידות יראו אותו לאחר רענון הדף.');
+    }catch(err){alert('שגיאה בהעלאה: '+(err.message||err.code||String(err)));}
+    setReqUl(false);e.target.value='';
+  };
   const addUpdate=async()=>{
     if(!upForm.title.trim()){alert('נא להזין כותרת');return;}
     setSavingUp(true);
@@ -559,11 +648,33 @@ function AdminPanel({users,setUsers,adminPw,setAdminPw,teacherPw,setTeacherPw,se
 
   const upYear=(uid,yr)=>{
     const u=users.find(x=>x.id===uid);if(!u)return;
-    const snap={year:u.year,at:new Date().toISOString()};
-    const hist=[...(u.yearHistory||[])];if(!hist.find(h=>h.year===u.year))hist.push(snap);
-    const upd=users.map(x=>x.id===uid?{...x,year:yr,yearHistory:hist}:x);setUsers(upd);
-    db.collection('users').doc(uid).update({year:yr,yearHistory:hist}).catch(console.error);
+    const oy=u.year;
+    if(String(oy)===String(yr)){alert('התלמידה כבר בשנה זו');return;}
+    if(!confirm(`להעביר את ${u.name} מ${YL[oy]||`שנה ${oy}`} ל${YL[yr]||`שנה ${yr}`}?\nהדיווחים הקיימים ישויכו לשנה הנוכחית ויעברו לארכיון, והמונים יתאפסו לשנה החדשה.`))return;
+    // שיוך דיווחים שטרם תויגו לשנה שממנה עוברים, כדי שלא ייספרו בשנה החדשה
+    const stamp=arr=>(arr||[]).map(r=>(r.yr===undefined||r.yr===null)?{...r,yr:oy}:r);
+    const practical=stamp(u.practical),supervision=stamp(u.supervision),cases=stamp(u.cases),proficiency=stamp(u.proficiency);
+    const cnt=arr=>(arr||[]).filter(r=>String(r.yr)===String(oy)).length;
+    const snap={year:oy,at:new Date().toISOString(),practical:cnt(practical),supervision:cnt(supervision),cases:cnt(cases),proficiency:cnt(proficiency)};
+    const hist=[...(u.yearHistory||[])].filter(h=>String(h.year)!==String(oy));hist.push(snap);
+    // עיגון המעבר האוטומטי: הרמה החדשה מתחילה בשנה האקדמית הנוכחית
+    const chg={year:yr,startLevel:parseInt(yr),startYYYY:acadYear(),yearHistory:hist,practical,supervision,cases,proficiency};
+    const upd=users.map(x=>x.id===uid?{...x,...chg}:x);setUsers(upd);
+    db.collection('users').doc(uid).update(chg).catch(console.error);
     alert(`שנה עודכנה ל-${YL[yr]||yr}`);
+  };
+  // הזנת שנת כניסה לתלמידה קיימת: מגדיר מאיזו שנה לועזית מתחילה הרמה הנוכחית שלה (בסיס למעבר האוטומטי)
+  const setEntryYear=uid=>{
+    const u=users.find(x=>x.id===uid);if(!u)return;
+    const cur=u.startYYYY||acadYear();
+    const inp=prompt(`שנת כניסה (לועזית) של ${u.name} לשנה ${YL[u.year]||u.year}:\nלמשל 2024. המערכת תקדם אותה אוטומטית כל 15/7.`,String(cur));
+    if(inp===null)return;
+    const y=parseInt(inp);
+    if(!y||y<2015||y>2100){alert('שנה לא תקינה');return;}
+    const chg={startLevel:parseInt(u.year),startYYYY:y};
+    const upd=users.map(x=>x.id===uid?{...x,...chg}:x);setUsers(upd);
+    db.collection('users').doc(uid).update(chg).catch(console.error);
+    alert('שנת הכניסה נשמרה');
   };
 
   const allFiles=users.flatMap(u=>[
@@ -618,7 +729,7 @@ function AdminPanel({users,setUsers,adminPw,setAdminPw,teacherPw,setTeacherPw,se
                 {[['','הכל'],['female','נשים'],['male','גברים']].map(([g,l])=>(
                   <button key={g} onClick={()=>setGf(g)} style={{padding:'3px 10px',borderRadius:'12px',fontSize:'.76rem',fontWeight:700,border:'1px solid #e5e7eb',cursor:'pointer',background:gf===g?'#1E244B':'white',color:gf===g?'white':'#6b7280'}}>{l}</button>
                 ))}
-                {(gf==='male'?[['','כל השנים'],['2',"ב'"],['3',"ג'"]]: [['','כל השנים'],['2',"ב'"],['3',"ג'"],['4',"ד'"]]).map(([y,l])=>(
+                {[['','כל השנים'],['2',"ב'"],['3',"ג'"],['4',"ד'"]].map(([y,l])=>(
                   <button key={y} onClick={()=>setYf(y)} style={{padding:'3px 10px',borderRadius:'12px',fontSize:'.76rem',fontWeight:700,border:'1px solid #e5e7eb',cursor:'pointer',background:yf===y?'#1E244B':'white',color:yf===y?'white':'#6b7280'}}>{l}</button>
                 ))}
               </div>
@@ -633,13 +744,14 @@ function AdminPanel({users,setUsers,adminPw,setAdminPw,teacherPw,setTeacherPw,se
                       <td style={{padding:'10px 13px'}}>{YL[u.year]||u.year}</td>
                       <td style={{padding:'10px 13px'}}>{u.gender==='female'?'אשה':'איש'}</td>
                       <td style={{padding:'10px 13px',color:'#6b7280',fontSize:'.79rem'}}>{u.email}</td>
-                      <td style={{padding:'10px 13px',fontWeight:600}}>{(u.practical||[]).length}</td>
-                      <td style={{padding:'10px 13px',fontWeight:600}}>{(u.supervision||[]).length}</td>
-                      <td style={{padding:'10px 13px',fontWeight:600}}>{(u.cases||[]).length}</td>
+                      {(()=>{const rq=gReq(u.gender,u.year);const cell=(done,need)=>{const ok=need&&done>=need;return <td style={{padding:'10px 13px',fontWeight:700,color:ok?'#059669':(done>0?'#b45309':'#9ca3af')}}>{done}{need?` / ${need}`:''}</td>;};return <>{cell(curRecs(u.practical,u.year).length,rq.p)}{cell(curRecs(u.supervision,u.year).length,rq.s)}{cell(curRecs(u.cases,u.year).length,rq.c)}</>;})()}
                       <td style={{padding:'10px 13px'}}>
                         <select value={u.year} onChange={e=>upYear(u.id,e.target.value)} style={{padding:'5px 8px',borderRadius:'7px',border:'1px solid #d1d5db',fontSize:'.81rem',fontFamily:'Assistant,sans-serif'}}>
                           <option value="2">שנה ב'</option><option value="3">שנה ג'</option><option value="4">שנה ד'</option>
                         </select>
+                        <button onClick={()=>setEntryYear(u.id)} title="שנת הכניסה הלועזית לרמה הנוכחית — בסיס למעבר האוטומטי ב-15/7"
+                          style={{display:'block',marginTop:'4px',padding:'3px 7px',borderRadius:'6px',background:u.startYYYY?'rgba(16,185,129,.1)':'rgba(245,158,11,.12)',color:u.startYYYY?'#059669':'#b45309',fontWeight:600,border:'1px solid '+(u.startYYYY?'rgba(16,185,129,.25)':'rgba(245,158,11,.3)'),cursor:'pointer',fontSize:'.72rem',whiteSpace:'nowrap'}}>
+                          {u.startYYYY?`כניסה: ${u.startYYYY}`:'⚠ הגדר שנת כניסה'}</button>
                       </td>
                       <td style={{padding:'10px 13px'}}>
                         <div style={{display:'flex',gap:'5px'}}>
@@ -763,6 +875,15 @@ function AdminPanel({users,setUsers,adminPw,setAdminPw,teacherPw,setTeacherPw,se
                     style={{width:'100%',padding:'10px 13px',border:'2px solid #e5e7eb',borderRadius:'9px',fontFamily:'monospace',fontWeight:600}}/>
                 </div>
               </div>
+            </div>
+            <div style={{background:'white',borderRadius:'13px',padding:'20px',boxShadow:'0 2px 10px rgba(0,0,0,.06)'}}>
+              <h2 style={{margin:'0 0 6px',fontSize:'.97rem',fontWeight:700}}>קובץ דרישות (הצגת מקרה + עבודה מסכמת)</h2>
+              <p style={{margin:'0 0 12px',fontSize:'.82rem',color:'#6b7280'}}>הקובץ מוצג לתלמידות להורדה בסעיפי הצגת מקרה והעבודה המסכמת.</p>
+              {reqFileInfo&&<p style={{margin:'0 0 10px',fontSize:'.84rem',fontWeight:600,color:'#059669'}}>✓ קובץ נוכחי: {reqFileInfo.name}</p>}
+              <label style={{display:'inline-block',padding:'10px 20px',borderRadius:'9px',background:reqUl?'#9ca3af':'#524686',color:'white',fontWeight:700,cursor:reqUl?'default':'pointer',fontSize:'.85rem'}}>
+                {reqUl?'מעלה…':(reqFileInfo?'החלף קובץ דרישות':'העלה קובץ דרישות')}
+                <input type="file" accept=".pdf,.doc,.docx" onChange={uploadReqFile} disabled={reqUl} style={{display:'none'}}/>
+              </label>
             </div>
             <div style={{background:'white',borderRadius:'13px',padding:'20px',boxShadow:'0 2px 10px rgba(0,0,0,.06)'}}>
               <h2 style={{margin:'0 0 10px',fontSize:'.97rem',fontWeight:700}}>גיבוי נתונים</h2>
@@ -949,7 +1070,7 @@ function TeacherPanel({users,setIsTeacher,setView,lockedGender,setTeacherGender}
   const stuUploads=u?uploads.filter(up=>up.studentId===u.id):[];
   const hasNew=uid=>uploads.some(up=>up.studentId===uid&&!up.seen);
   const newCount=uploads.filter(up=>!up.seen).length;
-  const years=gender==='male'?['2','3']:['2','3','4'];
+  const years=['2','3','4'];
   const YLoc={'2':"שנה ב'",'3':"שנה ג'",'4':"שנה ד' פלא יועץ"};
   const filtered=local.filter(x=>(!gender||x.gender===gender)&&(!year||x.year===year));
 
@@ -1060,6 +1181,7 @@ function LoginPage({users,setUsers,setCur,onLogo}){
       if(reg){
         const cred=await auth.createUserWithEmailAndPassword(form.email,form.pw);
         const nu={id:cred.user.uid,name:form.name,year:form.year,gender:form.gender,email:form.email,
+          startLevel:parseInt(form.year),startYYYY:acadYear(),
           practical:[],supervision:[],cases:[],impact:[],proficiency:[],finalProject:null,yearHistory:[]};
         await db.collection('users').doc(nu.id).set(nu);setUsers([...users,nu]);setCur(nu);
       }else{
@@ -1124,12 +1246,12 @@ function LoginPage({users,setUsers,setCur,onLogo}){
               <div>
                 <label className="fl-label">שנת לימוד</label>
                 <select value={form.year} onChange={e=>setForm({...form,year:e.target.value})}>
-                  <option value="2">שנה ב'</option><option value="3">שנה ג'</option><option value="4">שנה ד'</option>
+                  {trackYears(form.gender).map(y=><option key={y} value={y}>{YL[y]||('שנה '+y)}</option>)}
                 </select>
               </div>
               <div>
                 <label className="fl-label">מגדר</label>
-                <select value={form.gender} onChange={e=>setForm({...form,gender:e.target.value})}>
+                <select value={form.gender} onChange={e=>{const g=e.target.value;setForm(prev=>({...prev,gender:g,year:trackYears(g).includes(prev.year)?prev.year:'2'}));}}>
                   <option value="female">אשה</option><option value="male">איש</option>
                 </select>
               </div>
@@ -1166,7 +1288,7 @@ function LoginPage({users,setUsers,setCur,onLogo}){
                   } else {
                     // New Google user — needs to complete registration
                     const nu={id:uid,name:cred.user.displayName||'',email:cred.user.email||'',
-                      year:'2',gender:'female',
+                      year:'2',gender:'female',startLevel:2,startYYYY:acadYear(),
                       practical:[],supervision:[],cases:[],impact:[],proficiency:[],finalProject:null,yearHistory:[]};
                     await db.collection('users').doc(uid).set(nu);
                     setUsers(prev=>[...prev,nu]);
@@ -1216,15 +1338,20 @@ function LoginPage({users,setUsers,setCur,onLogo}){
   );
 }
 function MainApp({user,updateUser,view,setView,onLogout,onLogo,reqOv,siteC,updates,setUpdates}){
-  const req=gReq(user.gender,user.year,reqOv);
-  const yr=parseInt(user.year),isFem=user.gender==='female';
-  const yl=YL[user.year]||`שנה ${user.year}`;
+  const effYear=String(user.year);
+  const [activeYear,setActiveYear]=useState(effYear);
+  const ay=trackYears(user.gender).includes(activeYear)?activeYear:effYear;
+  const vu={...user,year:ay}; // אובייקט תצוגה: השנה שהתלמידה עובדת עליה כרגע
+  const req=gReq(user.gender,ay,reqOv);
+  const yr=parseInt(ay),isFem=user.gender==='female';
+  const yl=YL[ay]||`שנה ${ay}`;
   const readUps=user.readUpdates||[];
   const unreadCount=updates.filter(u=>!readUps.includes(u.id)).length;
   const nav=[
     {id:'dashboard',l:'סקירה'},{id:'practical',l:'שעות התנסות'},
     {id:'supervision',l:'הדרכות אישיות'},{id:'case',l:'הצגת מקרה'},
-    ...(isFem&&yr===4?[{id:'proficiency',l:'מבחני בקיאות'},{id:'finalwork',l:'עבודה מסכמת'}]:[]),
+    ...(req.pr?[{id:'proficiency',l:'מבחני בקיאות'}]:[]),
+    ...(req.fp?[{id:'finalwork',l:'עבודה מסכמת'}]:[]),
     {id:'updates',l:'עדכונים'},
     {id:'contacts',l:'אנשי קשר'},
   ];
@@ -1250,7 +1377,10 @@ function MainApp({user,updateUser,view,setView,onLogout,onLogo,reqOv,siteC,updat
           <div style={{display:'flex',alignItems:'center',gap:'16px',flexShrink:0}}>
             <div style={{textAlign:'left'}}>
               <div style={{fontWeight:700,fontSize:'0.95rem',color:'#1E244B'}}>{user.name}</div>
-              <div style={{fontSize:'0.78rem',color:'#54595F'}}>{yl}</div>
+              <select value={ay} onChange={e=>setActiveYear(e.target.value)} title="בחירת שנה לעדכון"
+                style={{marginTop:'3px',padding:'3px 8px',borderRadius:'8px',border:'1px solid var(--brd)',background:'var(--card)',color:'#54595F',fontSize:'0.78rem',fontWeight:600,fontFamily:"'Assistant',sans-serif",cursor:'pointer'}}>
+                {trackYears(user.gender).map(y=><option key={y} value={y}>{YL[y]||('שנה '+y)}</option>)}
+              </select>
             </div>
             <div style={{width:'1px',height:'32px',background:'var(--brd)'}}/>
             <button onClick={onLogout}
@@ -1276,12 +1406,15 @@ function MainApp({user,updateUser,view,setView,onLogout,onLogo,reqOv,siteC,updat
             </button>
           ))}
         </nav>
-        {view==='dashboard'&&<Dashboard user={user} setView={setView} req={req} siteC={siteC} unreadCount={unreadCount}/>}
-        {view==='practical'&&<PracticalHours user={user} updateUser={updateUser} req={req}/>}
-        {view==='supervision'&&<SupervisionHours user={user} updateUser={updateUser} req={req}/>}
-        {view==='case'&&<CasePresentation user={user} updateUser={updateUser} req={req}/>}
-        {view==='proficiency'&&<ProficiencyTests user={user} updateUser={updateUser} req={req}/>}
-        {view==='finalwork'&&<FinalProject user={user} updateUser={updateUser}/>}
+        <div style={{marginBottom:'16px',padding:'12px 16px',borderRadius:'11px',background:'rgba(232,143,106,.13)',border:'1px solid rgba(232,143,106,.4)',color:'#b45309',fontSize:'.92rem',fontWeight:700,textAlign:'center'}}>
+          {isFem?'שימי לב — את כעת מעדכנת':'שים לב — אתה כעת מעדכן'} נתונים של {YL[ay]||('שנה '+ay)}
+        </div>
+        {view==='dashboard'&&<Dashboard user={vu} setView={setView} req={req} siteC={siteC} unreadCount={unreadCount}/>}
+        {view==='practical'&&<PracticalHours user={vu} updateUser={updateUser} req={req}/>}
+        {view==='supervision'&&<SupervisionHours user={vu} updateUser={updateUser} req={req}/>}
+        {view==='case'&&<CasePresentation user={vu} updateUser={updateUser} req={req} siteC={siteC}/>}
+        {view==='proficiency'&&<ProficiencyTests user={vu} updateUser={updateUser} req={req}/>}
+        {view==='finalwork'&&<FinalProject user={vu} updateUser={updateUser} siteC={siteC}/>}
         {view==='updates'&&<UpdatesPage user={user} updateUser={updateUser} updates={updates}/>}
         {view==='contacts'&&<Contacts user={user}/>}
       </div>
@@ -1310,13 +1443,11 @@ function Dashboard({user,setView,req,siteC,unreadCount}){
   const yr=parseInt(user.year),isFem=user.gender==='female';
   const yl=YL[user.year]||`שנה ${user.year}`;
   const cards=[
-    {id:'practical',l:'שעות התנסות',done:(user.practical||[]).length,req:req.p||0,c:'#1E244B'},
-    {id:'supervision',l:'הדרכות אישיות',done:(user.supervision||[]).length,req:req.s||0,c:'#524686'},
-    {id:'case',l:'הצגת מקרה',done:(user.cases||[]).length,req:req.c||1,c:'#765C74'},
-    ...(isFem&&yr===4?[
-      {id:'proficiency',l:'מבחני בקיאות',done:(user.proficiency||[]).length,req:req.pr||2,c:'#C4896E'},
-      {id:'finalwork',l:'עבודה מסכמת',done:user.finalProject?1:0,req:1,c:'#E88F6A'},
-    ]:[]),
+    {id:'practical',l:'שעות התנסות',done:curRecs(user.practical,user.year).length,req:req.p||0,c:'#1E244B'},
+    {id:'supervision',l:'הדרכות אישיות',done:curRecs(user.supervision,user.year).length,req:req.s||0,c:'#524686'},
+    {id:'case',l:'הצגת מקרה',done:curRecs(user.cases,user.year).length,req:req.c||1,c:'#765C74'},
+    ...(req.pr?[{id:'proficiency',l:'מבחני בקיאות',done:curRecs(user.proficiency,user.year).length,req:req.pr,c:'#C4896E'}]:[]),
+    ...(req.fp?[{id:'finalwork',l:'עבודה מסכמת',done:user.finalProject?1:0,req:1,c:'#E88F6A'}]:[]),
   ];
   return(
     <div style={{display:'flex',flexDirection:'column',gap:'20px'}}>
@@ -1376,7 +1507,7 @@ function Dashboard({user,setView,req,siteC,unreadCount}){
         <h3 style={{margin:'0 0 8px',fontSize:'.9rem',fontWeight:700}}>דרישות {yl}</h3>
         <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(165px,1fr))',gap:'7px'}}>
           {[[req.p||0,'שעות התנסות'],[req.s||0,'הדרכות אישיות'],[req.c||1,`הצגת מקרה${(req.c||1)>1?` (${req.c||1})`:''}`],
-            ...(isFem&&yr===4?[[req.pr||2,'מבחני בקיאות'],['✓','עבודה מסכמת']]:[])
+            ...(req.pr?[[req.pr,'מבחני בקיאות']]:[]),...(req.fp?[['✓','עבודה מסכמת']]:[])
           ].map(([n,l])=>(
             <div key={l} style={{padding:'9px 13px',background:'rgba(255,255,255,0.14)',borderRadius:'9px',display:'flex',alignItems:'center',gap:'7px'}}>
               <span style={{fontWeight:800,fontSize:'1rem'}}>{n}</span>
@@ -1395,7 +1526,7 @@ function Dashboard({user,setView,req,siteC,unreadCount}){
               <p style={{margin:'0 0 5px',fontWeight:700,fontSize:'.87rem',color:'var(--txt)'}}>{YL[h.year]||`שנה ${h.year}`}{h.at?` — ${new Date(h.at).toLocaleDateString('he-IL')}`:''}</p>
               <div style={{display:'flex',gap:'12px',flexWrap:'wrap',fontSize:'.79rem',color:'var(--sub)'}}>
                 <span>התנסות: <b>{h.practical||0}</b></span><span>הדרכות: <b>{h.supervision||0}</b></span>
-                <span>הצגות: <b>{h.cases||0}</b></span>              </div>
+                <span>הצגות מקרה: <b>{h.cases||0}</b></span>{h.proficiency?<span>בקיאות: <b>{h.proficiency}</b></span>:null}              </div>
             </div>
           ))}
         </div>
@@ -1492,13 +1623,13 @@ function PracticalHours({user,updateUser,req}){
   const ef={date:'',num:'',open:'',topics:'',position:'',focus:'',insights:'',challenge:'',lessons:''};
   const [show,setShow]=useState(false),[editIdx,setEditIdx]=useState(null),[expIdx,setExpIdx]=useState(null),[ul,setUl]=useState(false),[form,setForm]=useState(ef);
   const reset=()=>{setForm(ef);setShow(false);setEditIdx(null);};
-  const save=e=>{e.preventDefault();const a=[...(user.practical||[])];if(editIdx!==null)a[editIdx]={...form,id:a[editIdx].id,atts:a[editIdx].atts||((a[editIdx].att)?[a[editIdx].att]:[])};else a.push({...form,id:Date.now().toString(),atts:[]});updateUser({practical:a});reset();alert('הדיווח נשמר');};
+  const save=e=>{e.preventDefault();const a=[...(user.practical||[])];if(editIdx!==null)a[editIdx]={...form,id:a[editIdx].id,atts:a[editIdx].atts||((a[editIdx].att)?[a[editIdx].att]:[])};else a.push({...form,id:Date.now().toString(),atts:[],yr:user.year});updateUser({practical:a});reset();alert('הדיווח נשמר');};
   const [prog,setProg]=useState(null);
   const getAtts=r=>{if(r.atts&&r.atts.length)return r.atts;if(r.att)return[r.att];return[];};
   const attach=async(e,i)=>{const f=e.target.files[0];if(!f)return;const ext1=(f.name.split('.').pop()||'').toLowerCase();if(!['pdf','doc','docx'].includes(ext1)){alert('PDF או Word בלבד');return;}const cur=getAtts((user.practical||[])[i]);if(cur.length>=3){alert('מקסימום 3 קבצים לדיווח');return;}setUl(true);setProg(0);try{const r=await upFile(f,user.id,'practical',p=>setProg(p));const a=[...(user.practical||[])];a[i]={...a[i],atts:[...cur,r]};updateUser({practical:a});alert('קובץ הועלה');}catch(e){console.error(e);alert('שגיאה בהעלאה: '+(e.message||e.code||String(e)));}setUl(false);setProg(null);e.target.value='';}; 
   const flds=[['open','כיצד התחילה הפגישה וכיצד הסתיימה?'],['topics','רצף הנושאים שעלו'],['position','עמדת הנועץ/ת ושינויים'],['focus','נקודות מיקוד ומה פעל הזזה'],['insights','תובנות והחלטות'],['challenge','קושי מרכזי ויעד הבא'],['lessons','לקחים אישיים']];
   return(<div>
-    <SH title="שעות התנסות מעשית" sub="דיווח והתבוננות על תהליך הייעוץ" done={(user.practical||[]).length} total={req.p||0} color="#1E244B" onAdd={()=>setShow(!show)} adding={show} />
+    <SH title="שעות התנסות מעשית" sub="דיווח והתבוננות על תהליך הייעוץ" done={curRecs(user.practical,user.year).length} total={req.p||0} color="#1E244B" onAdd={()=>setShow(!show)} adding={show} />
     {show&&(<div className="card" style={{padding:'22px',marginBottom:'14px'}}>
       <h3 style={{margin:'0 0 14px',fontSize:'.97rem',fontWeight:700,color:'var(--txt)'}}>{editIdx!==null?'עריכת דיווח':'דיווח חדש'}</h3>
       <form onSubmit={save} style={{display:'flex',flexDirection:'column',gap:'12px'}}>
@@ -1513,9 +1644,9 @@ function PracticalHours({user,updateUser,req}){
         </div>
       </form>
     </div>)}
-    <h3 style={{fontSize:'.88rem',fontWeight:700,color:'var(--txt)',margin:'0 0 9px'}}>הדיווחים שלי ({(user.practical||[]).length})</h3>
-    {!(user.practical||[]).length?(<div className="card" style={{padding:'36px',textAlign:'center'}}><p style={{color:'var(--sub)',marginBottom:'12px'}}>טרם דווחו שעות</p><button onClick={()=>setShow(true)} className="btn-p" style={{padding:'9px 20px',borderRadius:'10px',fontWeight:700,border:'none',cursor:'pointer'}}>דיווח ראשון</button></div>)
-    :(user.practical||[]).map((r,i)=>(
+    <h3 style={{fontSize:'.88rem',fontWeight:700,color:'var(--txt)',margin:'0 0 9px'}}>הדיווחים שלי בשנה הנוכחית ({curRecs(user.practical,user.year).length})</h3>
+    {!curRecs(user.practical,user.year).length?(<div className="card" style={{padding:'36px',textAlign:'center'}}><p style={{color:'var(--sub)',marginBottom:'12px'}}>טרם דווחו שעות בשנה זו</p><button onClick={()=>setShow(true)} className="btn-p" style={{padding:'9px 20px',borderRadius:'10px',fontWeight:700,border:'none',cursor:'pointer'}}>דיווח ראשון</button></div>)
+    :curRecs(user.practical,user.year).map((r)=>{const i=(user.practical||[]).indexOf(r);return(
       <RC key={r.id} badge={`מפגש #${r.num}`} bc="#1E244B" meta={r.date?new Date(r.date).toLocaleDateString('he-IL'):''} onEdit={()=>{setForm(r);setEditIdx(i);setShow(true);window.scrollTo({top:0,behavior:'smooth'});}} onDelete={()=>{if(confirm('למחוק?')){const a=[...user.practical];a.splice(i,1);updateUser({practical:a});}}} expanded={expIdx===i} onToggle={()=>setExpIdx(expIdx===i?null:i)} preview={r.open}>
         <div style={{display:'flex',flexDirection:'column',gap:'9px',marginBottom:'7px'}}>
           {flds.map(([k,t])=><RS key={k} title={t} content={r[k]}/>)}
@@ -1523,7 +1654,8 @@ function PracticalHours({user,updateUser,req}){
           {getAtts(r).length<3&&<UB onUpload={e=>attach(e,i)} uploading={ul} label={`צרף קובץ (${getAtts(r).length}/3)`} progress={prog}/>}
         </div>
       </RC>
-    ))}
+    );})}
+    <ArchiveList recs={pastRecs(user.practical,user.year)} label={r=>`מפגש #${r.num||''}`} preview={r=>r.open}/>
   </div>);
 }
 
@@ -1532,10 +1664,10 @@ function SupervisionHours({user,updateUser,req}){
   const ef={date:'',inst:'',topics:'',feedback:'',contribution:'',challenges:'',selfLearn:'',goals:'',lessons:''};
   const [show,setShow]=useState(false),[editIdx,setEditIdx]=useState(null),[expIdx,setExpIdx]=useState(null),[form,setForm]=useState(ef);
   const reset=()=>{setForm(ef);setShow(false);setEditIdx(null);};
-  const save=e=>{e.preventDefault();const a=[...(user.supervision||[])];if(editIdx!==null)a[editIdx]={...form,id:a[editIdx].id};else a.push({...form,id:Date.now().toString()});updateUser({supervision:a});reset();alert('דיווח נשמר');};
+  const save=e=>{e.preventDefault();const a=[...(user.supervision||[])];if(editIdx!==null)a[editIdx]={...form,id:a[editIdx].id};else a.push({...form,id:Date.now().toString(),yr:user.year});updateUser({supervision:a});reset();alert('דיווח נשמר');};
   const flds=[['topics','נושאים שנדונו',true],['feedback','משוב מהמדריך/ה',true],['contribution','תרומה להתפתחותך',true],['challenges','אתגרים שעלו',true],['selfLearn','מה למדת על עצמך',true],['goals','יעדים לפגישה הבאה',true],['lessons','לקחים (רשות)',false]];
   return(<div>
-    <SH title="הדרכות אישיות" sub="ליווי מקצועי והעמקת תהליך הלמידה" done={(user.supervision||[]).length} total={req.s||0} color="#524686" onAdd={()=>setShow(!show)} adding={show}/>
+    <SH title="הדרכות אישיות" sub="ליווי מקצועי והעמקת תהליך הלמידה" done={curRecs(user.supervision,user.year).length} total={req.s||0} color="#524686" onAdd={()=>setShow(!show)} adding={show}/>
     <div style={{padding:'9px 13px',borderRadius:'9px',background:'rgba(245,158,11,.07)',border:'1px solid rgba(245,158,11,.2)',marginBottom:'12px',fontSize:'.82rem',color:'#92400e',fontWeight:500}}>ההדרכות במחיר מסובסד ואינן כלולות בשכר הלימוד. התשלום מתבצע ישירות מול המדריכים.</div>
     {show&&(<div className="card" style={{padding:'22px',marginBottom:'14px'}}>
       <form onSubmit={save} style={{display:'flex',flexDirection:'column',gap:'12px'}}>
@@ -1547,45 +1679,122 @@ function SupervisionHours({user,updateUser,req}){
         <div style={{display:'flex',gap:'9px'}}><button type="submit" className="btn-p" style={{flex:1,padding:'11px',borderRadius:'10px',fontWeight:700,border:'none',cursor:'pointer'}}>שמור</button><button type="button" onClick={reset} style={{padding:'11px 18px',borderRadius:'10px',background:'rgba(0,0,0,.06)',color:'var(--txt)',fontWeight:600,border:'none',cursor:'pointer'}}>ביטול</button></div>
       </form>
     </div>)}
-    {!(user.supervision||[]).length?(<div className="card" style={{padding:'36px',textAlign:'center'}}><p style={{color:'var(--sub)',marginBottom:'12px'}}>טרם דווחו הדרכות</p><button onClick={()=>setShow(true)} className="btn-p" style={{padding:'9px 20px',borderRadius:'10px',fontWeight:700,border:'none',cursor:'pointer'}}>דיווח ראשון</button></div>)
-    :(user.supervision||[]).map((r,i)=>(
-      <RC key={r.id} badge={`הדרכה #${i+1}`} bc="#10b981" meta={`${r.date?new Date(r.date).toLocaleDateString('he-IL'):''}${r.inst?` | ${r.inst}`:''}`} onEdit={()=>{setForm(r);setEditIdx(i);setShow(true);window.scrollTo({top:0,behavior:'smooth'});}} onDelete={()=>{if(confirm('למחוק?')){const a=[...user.supervision];a.splice(i,1);updateUser({supervision:a});}}} expanded={expIdx===i} onToggle={()=>setExpIdx(expIdx===i?null:i)} preview={r.topics}>
+    {!curRecs(user.supervision,user.year).length?(<div className="card" style={{padding:'36px',textAlign:'center'}}><p style={{color:'var(--sub)',marginBottom:'12px'}}>טרם דווחו הדרכות בשנה זו</p><button onClick={()=>setShow(true)} className="btn-p" style={{padding:'9px 20px',borderRadius:'10px',fontWeight:700,border:'none',cursor:'pointer'}}>דיווח ראשון</button></div>)
+    :curRecs(user.supervision,user.year).map((r,idx)=>{const i=(user.supervision||[]).indexOf(r);return(
+      <RC key={r.id} badge={`הדרכה #${idx+1}`} bc="#10b981" meta={`${r.date?new Date(r.date).toLocaleDateString('he-IL'):''}${r.inst?` | ${r.inst}`:''}`} onEdit={()=>{setForm(r);setEditIdx(i);setShow(true);window.scrollTo({top:0,behavior:'smooth'});}} onDelete={()=>{if(confirm('למחוק?')){const a=[...user.supervision];a.splice(i,1);updateUser({supervision:a});}}} expanded={expIdx===i} onToggle={()=>setExpIdx(expIdx===i?null:i)} preview={r.topics}>
         <div style={{display:'flex',flexDirection:'column',gap:'9px',marginBottom:'7px'}}>{flds.map(([k,t])=><RS key={k} title={t} content={r[k]}/>)}</div>
       </RC>
-    ))}
+    );})}
+    <ArchiveList recs={pastRecs(user.supervision,user.year)} label={r=>r.inst||'הדרכה'} preview={r=>r.topics}/>
   </div>);
 }
 
-function CasePresentation({user,updateUser,req}){
-  const [ul,setUl]=useState(false);const [prog,setProg]=useState(null);const cases=user.cases||[];const rn=req.c||1;
-  const upload=async e=>{const f=e.target.files[0];if(!f)return;const ext2=(f.name.split('.').pop()||'').toLowerCase();if(!['pdf','doc','docx'].includes(ext2)){alert('PDF או Word בלבד');return;}setUl(true);setProg(0);try{const r=await upFile(f,user.id,'cases',p=>setProg(p));updateUser({cases:[...cases,{id:Date.now().toString(),...r}]});alert('הועלה בהצלחה!');}catch(e){console.error(e);alert('שגיאה בהעלאה: '+(e.message||e.code||String(e)));}setUl(false);setProg(null);e.target.value='';};
-  return(<div><SH title="הצגת מקרה" sub="העלאת קובץ PDF או Word" done={cases.length} total={rn} color="#524686" onAdd={()=>{}} adding={false}/>
-    <div className="card" style={{padding:'22px'}}>{cases.length<rn&&<div style={{textAlign:'center',padding:'14px 0'}}><p style={{color:'var(--sub)',marginBottom:'12px',fontSize:'.88rem'}}>יש להעלות {rn} קובץ הצגת מקרה</p><UB onUpload={upload} uploading={ul} progress={prog}/><p style={{color:'var(--sub)',fontSize:'.72rem',marginTop:'5px'}}>מקסימום 10MB</p></div>}
-    {cases.length>0&&<div style={{display:'flex',flexDirection:'column',gap:'7px',marginTop:cases.length<rn?'14px':0}}>{cases.map(c=>(
-      <div key={c.id} style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'11px 13px',borderRadius:'9px',background:'rgba(16,185,129,.06)',border:'1px solid rgba(16,185,129,.18)'}}>
-        <div><p style={{margin:'0 0 2px',fontWeight:600,fontSize:'.87rem',color:'var(--txt)'}}>{c.name}</p><p style={{margin:0,fontSize:'.73rem',color:'var(--sub)'}}>{c.at?new Date(c.at).toLocaleDateString('he-IL'):''}</p></div>
-        <div style={{display:'flex',gap:'6px'}}><a href="#" onClick={e=>{e.preventDefault();openFileUrl(c.url,c.name);}} style={{padding:'5px 11px',borderRadius:'7px',background:'#059669',color:'white',fontSize:'.79rem',fontWeight:600,textDecoration:'none',cursor:'pointer'}}>צפה</a><button onClick={()=>{if(confirm('למחוק?'))updateUser({cases:cases.filter(x=>x.id!==c.id)});}} style={{padding:'5px 11px',borderRadius:'7px',background:'rgba(239,68,68,.1)',color:'#ef4444',fontWeight:600,border:'none',cursor:'pointer',fontSize:'.79rem'}}>מחק</button></div>
+function CasePresentation({user,updateUser,req,siteC}){
+  const cases=user.cases||[];const curC=curRecs(user.cases,user.year);const rn=req.c||1;
+  const insts=CASE_INST;
+  const reqFile=siteC&&siteC.caseReqFile;
+  const ef={title:'',date:'',inst:'',presentation:null,summary:null};
+  const [show,setShow]=useState(false);const [editId,setEditId]=useState(null);const [form,setForm]=useState(ef);
+  const [ulP,setUlP]=useState(false);const [progP,setProgP]=useState(null);
+  const [ulS,setUlS]=useState(false);const [progS,setProgS]=useState(null);
+  const reset=()=>{setForm(ef);setShow(false);setEditId(null);};
+  const attach=async(e,which)=>{
+    const f=e.target.files[0];if(!f)return;
+    const ext=(f.name.split('.').pop()||'').toLowerCase();
+    if(!['pdf','doc','docx'].includes(ext)){alert('PDF או Word בלבד');return;}
+    const setUl=which==='presentation'?setUlP:setUlS,setProg=which==='presentation'?setProgP:setProgS;
+    setUl(true);setProg(0);
+    try{const r=await upFile(f,user.id,'cases',p=>setProg(p));setForm(prev=>({...prev,[which]:{url:r.url,name:r.name,at:r.at}}));}
+    catch(err){console.error(err);alert('שגיאה בהעלאה: '+(err.message||err.code||String(err)));}
+    setUl(false);setProg(null);e.target.value='';
+  };
+  const save=()=>{
+    if(!form.title.trim()){alert('נא להזין כותרת');return;}
+    if(!form.presentation&&!form.summary){alert('נא לצרף לפחות קובץ אחד');return;}
+    const a=[...cases];
+    if(editId){const i=a.findIndex(x=>x.id===editId);if(i>=0)a[i]={...a[i],title:form.title,date:form.date,inst:form.inst,presentation:form.presentation,summary:form.summary};}
+    else a.push({id:Date.now().toString(),yr:user.year,title:form.title,date:form.date,inst:form.inst,presentation:form.presentation,summary:form.summary});
+    updateUser({cases:a});reset();alert('נשמר');
+  };
+  const startEdit=c=>{setForm({title:c.title||c.name||'',date:c.date||'',inst:c.inst||'',presentation:c.presentation||(c.url?{url:c.url,name:c.name,at:c.at}:null),summary:c.summary||null});setEditId(c.id);setShow(true);window.scrollTo({top:0,behavior:'smooth'});};
+  const del=id=>{if(confirm('למחוק את הצגת המקרה?'))updateUser({cases:cases.filter(x=>x.id!==id)});};
+  const fileChip=(label,file)=>file&&file.url?(
+    <div key={label} style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:'8px',padding:'8px 11px',borderRadius:'8px',background:'rgba(16,185,129,.07)',border:'1px solid rgba(16,185,129,.18)',marginTop:'6px'}}>
+      <span style={{fontSize:'.8rem',fontWeight:600,color:'var(--txt)'}}>{label}: {file.name}</span>
+      <a href="#" onClick={e=>{e.preventDefault();openFileUrl(file.url,file.name);}} style={{padding:'4px 11px',borderRadius:'7px',background:'#059669',color:'white',fontSize:'.77rem',fontWeight:600,textDecoration:'none'}}>צפה</a>
+    </div>):null;
+  const renderCase=c=>(
+    <div key={c.id} className="card" style={{padding:'15px',marginBottom:'9px'}}>
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',gap:'10px'}}>
+        <div><p style={{margin:'0 0 3px',fontWeight:700,fontSize:'.92rem',color:'var(--txt)'}}>{c.title||c.name||'הצגת מקרה'}</p>
+          <p style={{margin:0,fontSize:'.76rem',color:'var(--sub)'}}>{c.date?new Date(c.date).toLocaleDateString('he-IL'):''}{c.inst?` · ${c.inst}`:''}</p></div>
+        <div style={{display:'flex',gap:'6px'}}>
+          <button onClick={()=>startEdit(c)} style={{padding:'4px 10px',borderRadius:'7px',background:'rgba(74,111,165,.1)',color:'#1E244B',fontWeight:600,border:'none',cursor:'pointer',fontSize:'.77rem'}}>ערוך</button>
+          <button onClick={()=>del(c.id)} style={{padding:'4px 10px',borderRadius:'7px',background:'rgba(239,68,68,.1)',color:'#ef4444',fontWeight:600,border:'none',cursor:'pointer',fontSize:'.77rem'}}>מחק</button>
+        </div>
       </div>
-    ))}{cases.length<rn&&<UB onUpload={upload} uploading={ul} progress={prog} label="העלה קובץ נוסף"/>}</div>}
-    </div></div>);
+      {fileChip('הצגת מקרה',c.presentation||(c.url?{url:c.url,name:c.name}:null))}
+      {fileChip('סיכום ותובנות',c.summary)}
+    </div>
+  );
+  return(<div>
+    <SH title="הצגת מקרה" sub="הצגה + סיכום ותובנות, עם כותרת לכל מקרה" done={curC.length} total={rn} color="#524686" onAdd={()=>{setForm(ef);setEditId(null);setShow(!show);}} adding={show}/>
+    {reqFile&&reqFile.url&&<div className="card" style={{padding:'13px 15px',marginBottom:'12px',display:'flex',justifyContent:'space-between',alignItems:'center',gap:'10px',flexWrap:'wrap'}}>
+      <span style={{fontWeight:700,fontSize:'.86rem',color:'var(--txt)'}}>📋 דרישות להצגת מקרה ולעבודה המסכמת</span>
+      <a href="#" onClick={e=>{e.preventDefault();openFileUrl(reqFile.url,reqFile.name);}} style={{padding:'6px 14px',borderRadius:'9px',background:'#524686',color:'white',fontWeight:700,fontSize:'.8rem',textDecoration:'none'}}>הורדת קובץ הדרישות</a>
+    </div>}
+    {show&&<div className="card" style={{padding:'20px',marginBottom:'14px'}}>
+      <h3 style={{margin:'0 0 14px',fontSize:'.95rem',fontWeight:700,color:'var(--txt)'}}>{editId?'עריכת הצגת מקרה':'הצגת מקרה חדשה'}</h3>
+      <div style={{display:'flex',flexDirection:'column',gap:'12px'}}>
+        <FL label="כותרת" req><input type="text" value={form.title} onChange={e=>setForm({...form,title:e.target.value})} placeholder="כותרת המקרה"/></FL>
+        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'12px'}}>
+          <FL label="תאריך"><input type="date" value={form.date} onChange={e=>setForm({...form,date:e.target.value})}/></FL>
+          <FL label="מדריך/ה"><select value={form.inst} onChange={e=>setForm({...form,inst:e.target.value})}><option value="">בחר/י מדריך/ה</option>{insts.map((x,i)=><option key={i} value={x.name}>{x.name}</option>)}</select></FL>
+        </div>
+        <div>
+          <label className="fl-label">קובץ הצגת מקרה</label>
+          {form.presentation&&<p style={{margin:'2px 0 5px',fontSize:'.8rem',color:'#059669',fontWeight:600}}>✓ {form.presentation.name}</p>}
+          <UB onUpload={e=>attach(e,'presentation')} uploading={ulP} progress={progP} label={form.presentation?'החלף קובץ הצגה':'צרף קובץ הצגה'}/>
+        </div>
+        <div>
+          <label className="fl-label">קובץ סיכום ותובנות</label>
+          {form.summary&&<p style={{margin:'2px 0 5px',fontSize:'.8rem',color:'#059669',fontWeight:600}}>✓ {form.summary.name}</p>}
+          <UB onUpload={e=>attach(e,'summary')} uploading={ulS} progress={progS} label={form.summary?'החלף קובץ סיכום':'צרף קובץ סיכום'}/>
+        </div>
+        <div style={{display:'flex',gap:'9px',paddingTop:'4px'}}>
+          <button onClick={save} className="btn-p" style={{flex:1,padding:'11px',borderRadius:'10px',fontWeight:700,border:'none',cursor:'pointer'}}>שמור</button>
+          <button onClick={reset} style={{padding:'11px 18px',borderRadius:'10px',background:'rgba(0,0,0,.06)',color:'var(--txt)',fontWeight:600,border:'none',cursor:'pointer'}}>ביטול</button>
+        </div>
+      </div>
+    </div>}
+    <h3 style={{fontSize:'.88rem',fontWeight:700,color:'var(--txt)',margin:'0 0 9px'}}>הצגות המקרה שלי בשנה זו ({curC.length}{rn?` / ${rn}`:''})</h3>
+    {!curC.length?<div className="card" style={{padding:'30px',textAlign:'center'}}><p style={{color:'var(--sub)'}}>טרם הועלו הצגות מקרה בשנה זו</p></div>:curC.map(renderCase)}
+    <ArchiveList recs={pastRecs(user.cases,user.year)} label={r=>r.title||r.name||'הצגת מקרה'} preview={r=>r.inst?('מדריך/ה: '+r.inst):null}/>
+  </div>);
 }
 
 function ProficiencyTests({user,updateUser,req}){
-  const [f,setF]=useState({date:'',topic:'',grade:''});const tests=user.proficiency||[];const rn=req.pr||2;
-  const add=()=>{if(!f.date||!f.topic){alert('נא למלא תאריך ונושא');return;}updateUser({proficiency:[...tests,{id:Date.now(),...f}]});setF({date:'',topic:'',grade:''});alert('מבחן נוסף');};
-  return(<div><SH title="מבחני בקיאות" sub={`${tests.length} / ${rn} מבחנים`} done={tests.length} total={rn} color="#C4896E" onAdd={()=>{}} adding={false}/>
+  const [f,setF]=useState({date:'',topic:'',grade:''});const tests=user.proficiency||[];const curT=curRecs(user.proficiency,user.year);const rn=req.pr||2;
+  const add=()=>{if(!f.date||!f.topic){alert('נא למלא תאריך ונושא');return;}updateUser({proficiency:[...tests,{id:Date.now(),yr:user.year,...f}]});setF({date:'',topic:'',grade:''});alert('מבחן נוסף');};
+  return(<div><SH title="מבחני בקיאות" sub={`${curT.length} / ${rn} מבחנים`} done={curT.length} total={rn} color="#C4896E" onAdd={()=>{}} adding={false}/>
     <div className="card" style={{padding:'20px',marginBottom:'12px'}}>
       <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:'11px'}}><FL label="תאריך"><input type="date" value={f.date} onChange={e=>setF({...f,date:e.target.value})}/></FL><FL label="נושא"><input type="text" value={f.topic} onChange={e=>setF({...f,topic:e.target.value})}/></FL><FL label="ציון (אופציונלי)"><input type="text" value={f.grade} onChange={e=>setF({...f,grade:e.target.value})}/></FL></div>
       <button onClick={add} className="btn-p" style={{width:'100%',padding:'10px',borderRadius:'10px',fontWeight:700,marginTop:'11px',border:'none',cursor:'pointer'}}>הוסף מבחן</button>
     </div>
-    {tests.map((t,i)=>(<div key={t.id} className="card" style={{padding:'13px',marginBottom:'7px'}}><div style={{display:'flex',justifyContent:'space-between'}}><p style={{margin:0,fontWeight:700,color:'var(--txt)',fontSize:'.87rem'}}>מבחן #{i+1} — {t.date?new Date(t.date).toLocaleDateString('he-IL'):''}</p><button onClick={()=>updateUser({proficiency:tests.filter(x=>x.id!==t.id)})} style={{background:'none',border:'none',color:'#ef4444',cursor:'pointer',fontWeight:600,fontSize:'.79rem'}}>מחק</button></div><p style={{margin:'3px 0 0',fontSize:'.83rem',color:'var(--sub)'}}>נושא: {t.topic}{t.grade?` | ציון: ${t.grade}`:''}</p></div>))}
+    {curT.map((t,i)=>(<div key={t.id} className="card" style={{padding:'13px',marginBottom:'7px'}}><div style={{display:'flex',justifyContent:'space-between'}}><p style={{margin:0,fontWeight:700,color:'var(--txt)',fontSize:'.87rem'}}>מבחן #{i+1} — {t.date?new Date(t.date).toLocaleDateString('he-IL'):''}</p><button onClick={()=>updateUser({proficiency:tests.filter(x=>x.id!==t.id)})} style={{background:'none',border:'none',color:'#ef4444',cursor:'pointer',fontWeight:600,fontSize:'.79rem'}}>מחק</button></div><p style={{margin:'3px 0 0',fontSize:'.83rem',color:'var(--sub)'}}>נושא: {t.topic}{t.grade?` | ציון: ${t.grade}`:''}</p></div>))}
+    <ArchiveList recs={pastRecs(user.proficiency,user.year)} label={r=>r.topic||'מבחן'} preview={r=>r.grade?`ציון: ${r.grade}`:null}/>
   </div>);
 }
 
-function FinalProject({user,updateUser}){
+function FinalProject({user,updateUser,siteC}){
   const [ul,setUl]=useState(false);const [prog,setProg]=useState(null);const proj=user.finalProject;
+  const reqFile=siteC&&siteC.caseReqFile;
   const upload=async e=>{const f=e.target.files[0];if(!f)return;const ext3=(f.name.split('.').pop()||'').toLowerCase();if(!['pdf','doc','docx'].includes(ext3)){alert('PDF או Word בלבד');return;}setUl(true);setProg(0);try{const r=await upFile(f,user.id,'final',p=>setProg(p));updateUser({finalProject:r});alert('העבודה הועלתה!');}catch(e){console.error(e);alert('שגיאה בהעלאה: '+(e.message||e.code||String(e)));}setUl(false);setProg(null);e.target.value='';};
   return(<div><SH title="עבודה מסכמת" sub="העלאת קובץ PDF או Word" done={proj?1:0} total={1} color="#E88F6A" onAdd={()=>{}} adding={false}/>
+    {reqFile&&reqFile.url&&<div className="card" style={{padding:'13px 15px',marginBottom:'12px',display:'flex',justifyContent:'space-between',alignItems:'center',gap:'10px',flexWrap:'wrap'}}>
+      <span style={{fontWeight:700,fontSize:'.86rem',color:'var(--txt)'}}>📋 דרישות לעבודה המסכמת</span>
+      <a href="#" onClick={e=>{e.preventDefault();openFileUrl(reqFile.url,reqFile.name);}} style={{padding:'6px 14px',borderRadius:'9px',background:'#E88F6A',color:'white',fontWeight:700,fontSize:'.8rem',textDecoration:'none'}}>הורדת קובץ הדרישות</a>
+    </div>}
     <div className="card" style={{padding:'26px',textAlign:'center'}}>
       {!proj?<><p style={{color:'var(--sub)',marginBottom:'14px'}}>טרם הועלתה עבודה מסכמת</p><UB onUpload={upload} uploading={ul} progress={prog}/><p style={{color:'var(--sub)',fontSize:'.72rem',marginTop:'5px'}}>מקסימום 10MB</p></>
       :<><div style={{padding:'13px 15px',borderRadius:'11px',background:'rgba(16,185,129,.07)',border:'1px solid rgba(16,185,129,.2)',marginBottom:'13px',textAlign:'right'}}><p style={{margin:'0 0 2px',fontWeight:700,color:'#059669',fontSize:'.88rem'}}>העבודה הועלתה</p><p style={{margin:'0 0 1px',fontSize:'.87rem',color:'var(--txt)'}}>{proj.name}</p><p style={{margin:0,fontSize:'.75rem',color:'var(--sub)'}}>{proj.at?new Date(proj.at).toLocaleDateString('he-IL'):''}</p></div>
