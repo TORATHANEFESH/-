@@ -759,7 +759,7 @@ function AdminPanel({users,setUsers,adminPw,setAdminPw,teacherPw,setTeacherPw,se
                             style={{padding:'4px 9px',borderRadius:'7px',background:'rgba(99,102,241,.1)',color:'#6366f1',fontWeight:700,border:'1px solid rgba(99,102,241,.2)',cursor:'pointer',fontSize:'.79rem'}}>פרטים</button>
                           <button onClick={()=>{const n=prompt('שם חדש:',u.name);if(n&&n.trim()){const upd=users.map(x=>x.id===u.id?{...x,name:n.trim()}:x);setUsers(upd);db.collection('users').doc(u.id).update({name:n.trim()}).catch(console.error);}}}
                             style={{padding:'4px 9px',borderRadius:'7px',background:'rgba(74,111,165,.1)',color:'#1E244B',fontWeight:700,border:'1px solid rgba(74,111,165,.2)',cursor:'pointer',fontSize:'.79rem'}}>ערוך</button>
-                          <button onClick={()=>{if(confirm(`למחוק את ${u.name}?`)){db.collection('users').doc(u.id).delete().then(()=>setUsers(users.filter(x=>x.id!==u.id))).catch(e=>alert('שגיאה: '+e.message));}}}
+                          <button onClick={()=>{if(confirm(`למחוק את ${u.name}?\nהנתונים יעברו לארכיון (לא יימחקו לצמיתות). אם היא תירשם שוב בעתיד, היא תיכנס כאיש קשר חדש עם פרופיל ריק.`)){db.collection('archivedUsers').doc(u.id).set({...u,archivedAt:new Date().toISOString()}).then(()=>db.collection('users').doc(u.id).delete()).then(()=>setUsers(users.filter(x=>x.id!==u.id))).catch(e=>alert('שגיאה: '+e.message));}}}
                             style={{padding:'4px 9px',borderRadius:'7px',background:'rgba(239,68,68,.1)',color:'#ef4444',fontWeight:700,border:'1px solid rgba(239,68,68,.2)',cursor:'pointer',fontSize:'.79rem'}}>מחק</button>
                         </div>
                       </td>
@@ -1174,6 +1174,7 @@ function LoginPage({users,setUsers,setCur,onLogo}){
   const [reg,setReg]=useState(false);
   const [form,setForm]=useState({name:'',year:'2',gender:'female',email:'',pw:''});
   const [loading,setLoading]=useState(false);
+  const [needsProfile,setNeedsProfile]=useState(null); // {uid,email} — משתמש מאומת בלי פרופיל פעיל (למשל נמחקה בעבר)
 
   const submit=async e=>{
     e.preventDefault();setLoading(true);
@@ -1188,13 +1189,27 @@ function LoginPage({users,setUsers,setCur,onLogo}){
         const cred=await auth.signInWithEmailAndPassword(form.email,form.pw);
         const doc=await db.collection('users').doc(cred.user.uid).get();
         if(doc.exists) setCur({practical:[],supervision:[],cases:[],impact:[],proficiency:[],finalProject:null,yearHistory:[],...doc.data(),id:doc.id});
-        else alert('לא נמצא משתמש');
+        else setNeedsProfile({uid:cred.user.uid,email:cred.user.email||form.email});
       }
     }catch(err){
       const m={'auth/email-already-in-use':'המייל כבר קיים','auth/wrong-password':'סיסמה שגויה',
         'auth/user-not-found':'משתמש לא קיים','auth/invalid-credential':'פרטי כניסה שגויים'};
       alert(m[err.code]||err.message);
     }
+    setLoading(false);
+  };
+
+  // משתמש מאומת (למשל תלמידה שנמחקה בעבר ונרשמה שוב) — נפתח לה פרופיל חדש וריק, בלי לשחזר נתונים מהארכיון
+  const completeProfile=async e=>{
+    e.preventDefault();
+    if(!form.name.trim()){alert('נא להזין שם');return;}
+    setLoading(true);
+    try{
+      const nu={id:needsProfile.uid,name:form.name,year:form.year,gender:form.gender,email:needsProfile.email,
+        startLevel:parseInt(form.year),startYYYY:acadYear(),
+        practical:[],supervision:[],cases:[],impact:[],proficiency:[],finalProject:null,yearHistory:[]};
+      await db.collection('users').doc(nu.id).set(nu);setUsers([...users,nu]);setCur(nu);
+    }catch(err){alert(err.message);}
     setLoading(false);
   };
 
@@ -1232,6 +1247,36 @@ function LoginPage({users,setUsers,setCur,onLogo}){
       <div style={{background:'rgba(255,255,255,0.97)',borderRadius:'20px',padding:'44px 40px',
         maxWidth:'420px',width:'100%',boxShadow:'0 20px 48px rgba(0,0,0,0.35)',
         position:'relative',zIndex:2}}>
+        {needsProfile?(<>
+        <div style={{textAlign:'center',marginBottom:'24px'}}>
+          <h2 style={{fontSize:'1.32rem',fontWeight:700,color:'#1E244B',margin:'0 0 4px'}}>ברוכים הבאים!</h2>
+          <p style={{color:'#54595F',fontSize:'0.9rem',margin:0}}>נראה שזו כניסתך הראשונה — נשלים כמה פרטים כדי לפתוח לך פרופיל</p>
+        </div>
+        <form onSubmit={completeProfile}>
+          <div style={{marginBottom:'14px'}}>
+            <label className="fl-label req">שם מלא</label>
+            <input type="text" required value={form.name} onChange={e=>setForm({...form,name:e.target.value})} placeholder="שם פרטי ושם משפחה"/>
+          </div>
+          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'12px',marginBottom:'22px'}}>
+            <div>
+              <label className="fl-label">שנת לימוד</label>
+              <select value={form.year} onChange={e=>setForm({...form,year:e.target.value})}>
+                {trackYears(form.gender).map(y=><option key={y} value={y}>{YL[y]||('שנה '+y)}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="fl-label">מגדר</label>
+              <select value={form.gender} onChange={e=>{const g=e.target.value;setForm(prev=>({...prev,gender:g,year:trackYears(g).includes(prev.year)?prev.year:'2'}));}}>
+                <option value="female">אשה</option><option value="male">איש</option>
+              </select>
+            </div>
+          </div>
+          <button type="submit" className="btn-p" disabled={loading}
+            style={{width:'100%',padding:'14px',borderRadius:'13px',fontSize:'1rem',fontWeight:700,opacity:loading?0.7:1}}>
+            {loading?'רגע...':'המשך'}
+          </button>
+        </form>
+        </>):(<>
         <div style={{textAlign:'center',marginBottom:'24px'}}>
           <h2 style={{fontSize:'1.32rem',fontWeight:700,color:'#1E244B',margin:'0 0 4px'}}>כניסה למערכת</h2>
           <p style={{color:'#54595F',fontSize:'0.9rem',margin:0}}>הזינו פרטים כדי להמשיך</p>
@@ -1329,6 +1374,7 @@ function LoginPage({users,setUsers,setCur,onLogo}){
             </button>
           </>}
         </div>
+        </>)}
       </div>
       </div>
 
