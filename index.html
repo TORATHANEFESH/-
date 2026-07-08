@@ -173,25 +173,25 @@ const INST={
     {name:'אורלי טוויטו',wa:'0546761118'},
     {name:'רחלי אלפסי',wa:'0544652415'},
     {name:'חגית גרון',wa:'0556897708'},
-    {name:'ריקי שפירא',wa:'0526071775'},
-    {name:'שולמית בן חור',wa:'0502105662'}
+    {name:'ריקי שפירא',wa:'0526071775'}
   ],
   male:[
     {name:'הרב מנחם בן שחר',wa:'0584829829'},
     {name:'הרב נעם שפירא',wa:'0508884177'},
-    {name:'הרב חיים נתיב',wa:null,note:'* תשלום וקביעת מפגש עם הרב חיים דרך המשרד בוואטסאפ 02-5662323'},
+    {name:'הרב חיים נתיב',wa:null,note:'* תיאום דרך המשרד — תשלום וקביעת מפגש עם הרב חיים בוואטסאפ 02-5662323'},
     {name:'הרב איציק שפירא',wa:'0525662323'},
-    {name:'הרב אפרים ארנברג',wa:'0523376656'}
+    {name:'הרב אפרים ארנברג',wa:'0523376656',email:'Ephraim1@gmail.com'}
   ]
 };
 // מדריכי הצגת מקרה — רשימה משותפת לכולם (שונה ממדריכי ההדרכות האישיות)
 const CASE_INST=[
   {name:'הרב חיים נתיב'},
-  {name:'הרב איציק שפירא'},
   {name:'הרב נעם שפירא'},
   {name:'הרב אפרים ארנברג'},
   {name:'הרב מנחם בן שחר'}
 ];
+// אנשי קשר שמוצג לצידם "(לגברים בלבד)" במסך אנשי הקשר בלבד — אינו נוגע לערך name המשותף
+const MALE_ONLY_CONTACTS=['הרב חיים נתיב','הרב אפרים ארנברג','הרב מנחם בן שחר'];
 
 function gReq(g,y,ov){
   const b=((DEF_REQ[g]||{})[parseInt(y)])||{};
@@ -737,7 +737,7 @@ function AdminPanel({users,setUsers,adminPw,setAdminPw,teacherPw,setTeacherPw,se
             {!users.length?<p style={{textAlign:'center',color:'#9ca3af',padding:'36px'}}>טוען...</p>:(
               <div style={{overflowX:'auto'}}>
                 <table style={{width:'100%',borderCollapse:'collapse',fontSize:'.85rem'}}>
-                  <thead><tr style={{background:'#f9fafb'}}>{['שם','שנה','מגדר','אימייל','התנסות','הדרכות','הצגות מקרה','שינוי שנה','פעולות'].map(h=><th key={h} style={{padding:'10px 13px',textAlign:'right',fontWeight:700,color:'#374151',whiteSpace:'nowrap'}}>{h}</th>)}</tr></thead>
+                  <thead><tr style={{background:'#f9fafb'}}>{['שם','שנה','מגדר','אימייל','התנסות','הדרכות','הצגות מקרה','כניסה אחרונה','שינוי שנה','פעולות'].map(h=><th key={h} style={{padding:'10px 13px',textAlign:'right',fontWeight:700,color:'#374151',whiteSpace:'nowrap'}}>{h}</th>)}</tr></thead>
                   <tbody>{users.filter(u=>(!gf||u.gender===gf)&&(!yf||u.year===yf)).map((u,i)=>(
                     <tr key={u.id} style={{background:i%2===0?'white':'#fafafa',borderTop:'1px solid #e5e7eb'}}>
                       <td style={{padding:'10px 13px',fontWeight:600}}>{u.name}</td>
@@ -745,6 +745,7 @@ function AdminPanel({users,setUsers,adminPw,setAdminPw,teacherPw,setTeacherPw,se
                       <td style={{padding:'10px 13px'}}>{u.gender==='female'?'אשה':'איש'}</td>
                       <td style={{padding:'10px 13px',color:'#6b7280',fontSize:'.79rem'}}>{u.email}</td>
                       {(()=>{const rq=gReq(u.gender,u.year);const cell=(done,need)=>{const ok=need&&done>=need;return <td style={{padding:'10px 13px',fontWeight:700,color:ok?'#059669':(done>0?'#b45309':'#9ca3af')}}>{done}{need?` / ${need}`:''}</td>;};return <>{cell(curRecs(u.practical,u.year).length,rq.p)}{cell(curRecs(u.supervision,u.year).length,rq.s)}{cell(curRecs(u.cases,u.year).length,rq.c)}</>;})()}
+                      <td style={{padding:'10px 13px',color:'#6b7280',fontSize:'.79rem',whiteSpace:'nowrap'}}>{u.lastLogin?new Date(u.lastLogin).toLocaleDateString('he-IL',{day:'numeric',month:'numeric',year:'2-digit',hour:'2-digit',minute:'2-digit'}):'—'}</td>
                       <td style={{padding:'10px 13px'}}>
                         <select value={u.year} onChange={e=>upYear(u.id,e.target.value)} style={{padding:'5px 8px',borderRadius:'7px',border:'1px solid #d1d5db',fontSize:'.81rem',fontFamily:'Assistant,sans-serif'}}>
                           <option value="2">שנה ב'</option><option value="3">שנה ג'</option><option value="4">שנה ד'</option>
@@ -1188,7 +1189,11 @@ function LoginPage({users,setUsers,setCur,onLogo}){
       }else{
         const cred=await auth.signInWithEmailAndPassword(form.email,form.pw);
         const doc=await db.collection('users').doc(cred.user.uid).get();
-        if(doc.exists) setCur({practical:[],supervision:[],cases:[],impact:[],proficiency:[],finalProject:null,yearHistory:[],...doc.data(),id:doc.id});
+        if(doc.exists){
+          const lastLogin=new Date().toISOString();
+          setCur({practical:[],supervision:[],cases:[],impact:[],proficiency:[],finalProject:null,yearHistory:[],...doc.data(),id:doc.id,lastLogin});
+          db.collection('users').doc(doc.id).update({lastLogin}).catch(console.error);
+        }
         else setNeedsProfile({uid:cred.user.uid,email:cred.user.email||form.email});
       }
     }catch(err){
@@ -1329,7 +1334,9 @@ function LoginPage({users,setUsers,setCur,onLogo}){
                   const uid=cred.user.uid;
                   const doc=await db.collection('users').doc(uid).get();
                   if(doc.exists){
-                    setCur({practical:[],supervision:[],cases:[],impact:[],proficiency:[],finalProject:null,yearHistory:[],...doc.data(),id:uid});
+                    const lastLogin=new Date().toISOString();
+                    setCur({practical:[],supervision:[],cases:[],impact:[],proficiency:[],finalProject:null,yearHistory:[],...doc.data(),id:uid,lastLogin});
+                    db.collection('users').doc(uid).update({lastLogin}).catch(console.error);
                   } else {
                     // New Google user — needs to complete registration
                     const nu={id:uid,name:cred.user.displayName||'',email:cred.user.email||'',
@@ -1398,7 +1405,7 @@ function MainApp({user,updateUser,view,setView,onLogout,onLogo,reqOv,siteC,updat
     {id:'supervision',l:'הדרכות אישיות'},{id:'case',l:'הצגת מקרה'},
     ...(req.pr?[{id:'proficiency',l:'מבחני בקיאות'}]:[]),
     ...(req.fp?[{id:'finalwork',l:'עבודה מסכמת'}]:[]),
-    {id:'updates',l:'עדכונים'},
+    ...(isFem?[{id:'updates',l:'צעדים ראשוניים'}]:[]),
     {id:'contacts',l:'אנשי קשר'},
   ];
   return(
@@ -1461,7 +1468,7 @@ function MainApp({user,updateUser,view,setView,onLogout,onLogo,reqOv,siteC,updat
         {view==='case'&&<CasePresentation user={vu} updateUser={updateUser} req={req} siteC={siteC}/>}
         {view==='proficiency'&&<ProficiencyTests user={vu} updateUser={updateUser} req={req}/>}
         {view==='finalwork'&&<FinalProject user={vu} updateUser={updateUser} siteC={siteC}/>}
-        {view==='updates'&&<UpdatesPage user={user} updateUser={updateUser} updates={updates}/>}
+        {view==='updates'&&isFem&&<UpdatesPage user={user} updateUser={updateUser} updates={updates}/>}
         {view==='contacts'&&<Contacts user={user}/>}
       </div>
       <Footer siteC={siteC}/>
@@ -1605,7 +1612,7 @@ function SH({title,sub,done,total,color,onAdd,adding}){
     </div>
   );
 }
-function FL({label,req,children}){return(<div><label className={`fl-label${req?' req':''}`}>{label}</label>{children}</div>);}
+function FL({label,req,help,children}){return(<div><label className={`fl-label${req?' req':''}`}>{label}</label>{help&&<p style={{margin:'0 0 6px',fontSize:'.78rem',color:'var(--sub)'}}>{help}</p>}{children}</div>);}
 function RS({title,content}){
   if(!content)return null;
   return(<div style={{borderRight:'3px solid var(--a1)',paddingRight:'11px'}}>
@@ -1631,7 +1638,7 @@ function RC({badge,bc,meta,onEdit,onDelete,expanded,onToggle,children,preview}){
     </div>
   );
 }
-function UB({onUpload,uploading,label,progress}){
+function UB({onUpload,uploading,label,progress,accept}){
   const r=40,c=2*Math.PI*r,pct=progress||0,off=c-(pct/100)*c;
   return(
     <div style={{display:'flex',flexDirection:'column',alignItems:'center',gap:'8px'}}>
@@ -1640,7 +1647,7 @@ function UB({onUpload,uploading,label,progress}){
           <span className="btn-p" style={{display:'inline-block',padding:'8px 17px',borderRadius:'10px',fontWeight:700,fontSize:'.85rem',cursor:'pointer'}}>
             {label||'העלה קובץ (PDF / Word)'}
           </span>
-          <input type="file" accept=".pdf,.doc,.docx" onChange={onUpload} disabled={uploading} style={{display:'none'}}/>
+          <input type="file" accept={accept||'.pdf,.doc,.docx'} onChange={onUpload} disabled={uploading} style={{display:'none'}}/>
         </label>
       ):(
         <div style={{position:'relative',width:'90px',height:'90px',display:'flex',alignItems:'center',justifyContent:'center'}}>
@@ -1666,14 +1673,14 @@ function UB({onUpload,uploading,label,progress}){
 
 // ══════════ PRACTICAL HOURS ══════════
 function PracticalHours({user,updateUser,req}){
-  const ef={date:'',num:'',open:'',topics:'',position:'',focus:'',insights:'',challenge:'',lessons:''};
+  const ef={date:'',num:'',open:'',topics:'',position:'',focus:'',insights:'',nextQuestions:'',challenge:'',lessons:''};
   const [show,setShow]=useState(false),[editIdx,setEditIdx]=useState(null),[expIdx,setExpIdx]=useState(null),[ul,setUl]=useState(false),[form,setForm]=useState(ef);
   const reset=()=>{setForm(ef);setShow(false);setEditIdx(null);};
   const save=e=>{e.preventDefault();const a=[...(user.practical||[])];if(editIdx!==null)a[editIdx]={...form,id:a[editIdx].id,atts:a[editIdx].atts||((a[editIdx].att)?[a[editIdx].att]:[])};else a.push({...form,id:Date.now().toString(),atts:[],yr:user.year});updateUser({practical:a});reset();alert('הדיווח נשמר');};
   const [prog,setProg]=useState(null);
   const getAtts=r=>{if(r.atts&&r.atts.length)return r.atts;if(r.att)return[r.att];return[];};
   const attach=async(e,i)=>{const f=e.target.files[0];if(!f)return;const ext1=(f.name.split('.').pop()||'').toLowerCase();if(!['pdf','doc','docx'].includes(ext1)){alert('PDF או Word בלבד');return;}const cur=getAtts((user.practical||[])[i]);if(cur.length>=3){alert('מקסימום 3 קבצים לדיווח');return;}setUl(true);setProg(0);try{const r=await upFile(f,user.id,'practical',p=>setProg(p));const a=[...(user.practical||[])];a[i]={...a[i],atts:[...cur,r]};updateUser({practical:a});alert('קובץ הועלה');}catch(e){console.error(e);alert('שגיאה בהעלאה: '+(e.message||e.code||String(e)));}setUl(false);setProg(null);e.target.value='';}; 
-  const flds=[['open','כיצד התחילה הפגישה וכיצד הסתיימה?'],['topics','רצף הנושאים שעלו'],['position','עמדת הנועץ/ת ושינויים'],['focus','נקודות מיקוד ומה פעל הזזה'],['insights','תובנות והחלטות'],['challenge','קושי מרכזי ויעד הבא'],['lessons','לקחים אישיים']];
+  const flds=[['open','כיצד התחילה הפגישה וכיצד הסתיימה?'],['topics','רצף הנושאים שעלו'],['position','עמדת הנועץ',null,'נקודות קושי שעלו בפגישה, מחשבות שעלו לך.'],['focus','נקודות מפתח ופעולות הזזה'],['insights','תובנות'],['nextQuestions','שאלות לקראת הפגישה הבאה'],['challenge','קושי מרכזי ויעד הבא'],['lessons','לקחים אישיים']];
   return(<div>
     <SH title="שעות התנסות מעשית" sub="דיווח והתבוננות על תהליך הייעוץ" done={curRecs(user.practical,user.year).length} total={req.p||0} color="#1E244B" onAdd={()=>setShow(!show)} adding={show} />
     {show&&(<div className="card" style={{padding:'22px',marginBottom:'14px'}}>
@@ -1683,7 +1690,7 @@ function PracticalHours({user,updateUser,req}){
           <FL label="תאריך" req><input type="date" required value={form.date} onChange={e=>setForm({...form,date:e.target.value})}/></FL>
           <FL label="מספר מפגש" req><input type="number" min="1" required value={form.num} onChange={e=>setForm({...form,num:e.target.value})}/></FL>
         </div>
-        {flds.map(([k,l])=><FL key={k} label={l} req><textarea required value={form[k]} rows={3} onChange={e=>setForm({...form,[k]:e.target.value})} style={{resize:'vertical'}}/></FL>)}
+        {flds.map(([k,l,,h])=><FL key={k} label={l} req help={h}><textarea required value={form[k]} rows={3} onChange={e=>setForm({...form,[k]:e.target.value})} style={{resize:'vertical'}}/></FL>)}
         <div style={{display:'flex',gap:'9px',paddingTop:'4px'}}>
           <button type="submit" className="btn-p" style={{flex:1,padding:'11px',borderRadius:'10px',fontWeight:700,border:'none',cursor:'pointer'}}>שמור</button>
           <button type="button" onClick={reset} style={{padding:'11px 18px',borderRadius:'10px',background:'rgba(0,0,0,.06)',color:'var(--txt)',fontWeight:600,border:'none',cursor:'pointer'}}>ביטול</button>
@@ -1707,11 +1714,20 @@ function PracticalHours({user,updateUser,req}){
 
 // ══════════ SUPERVISION ══════════
 function SupervisionHours({user,updateUser,req}){
-  const ef={date:'',inst:'',topics:'',feedback:'',contribution:'',challenges:'',selfLearn:'',goals:'',lessons:''};
+  const ef={date:'',inst:'',topics:'',feedback:'',contribution:'',challenges:'',selfLearn:'',clientUpdate:'',goals:'',lessons:''};
   const [show,setShow]=useState(false),[editIdx,setEditIdx]=useState(null),[expIdx,setExpIdx]=useState(null),[form,setForm]=useState(ef);
   const reset=()=>{setForm(ef);setShow(false);setEditIdx(null);};
   const save=e=>{e.preventDefault();const a=[...(user.supervision||[])];if(editIdx!==null)a[editIdx]={...form,id:a[editIdx].id};else a.push({...form,id:Date.now().toString(),yr:user.year});updateUser({supervision:a});reset();alert('דיווח נשמר');};
-  const flds=[['topics','נושאים שנדונו',true],['feedback','משוב מהמדריך/ה',true],['contribution','תרומה להתפתחותך',true],['challenges','אתגרים שעלו',true],['selfLearn','מה למדת על עצמך',true],['goals','יעדים לפגישה הבאה',true],['lessons','לקחים (רשות)',false]];
+  const flds=[
+    ['challenges','אתגרים שעלו',true,'עם אילו שאלות באת להדרכה?'],
+    ['selfLearn','מה למדת על עצמך',true],
+    ['clientUpdate','מה התחדש לך לגבי הנועצת',true],
+    ['contribution','במה תרמתי מההדרכה',true],
+    ['goals','מטרות לפגישה הבאה',true],
+    ['lessons','נקודות להדרכה הבאה',false],
+    ['topics','נושאים שנדונו',true],
+    ['feedback','משוב מהמדריך/ה',true],
+  ];
   return(<div>
     <SH title="הדרכות אישיות" sub="ליווי מקצועי והעמקת תהליך הלמידה" done={curRecs(user.supervision,user.year).length} total={req.s||0} color="#524686" onAdd={()=>setShow(!show)} adding={show}/>
     <div style={{padding:'9px 13px',borderRadius:'9px',background:'rgba(245,158,11,.07)',border:'1px solid rgba(245,158,11,.2)',marginBottom:'12px',fontSize:'.82rem',color:'#92400e',fontWeight:500}}>ההדרכות במחיר מסובסד ואינן כלולות בשכר הלימוד. התשלום מתבצע ישירות מול המדריכים.</div>
@@ -1721,7 +1737,7 @@ function SupervisionHours({user,updateUser,req}){
           <FL label="תאריך" req><input type="date" required value={form.date} onChange={e=>setForm({...form,date:e.target.value})}/></FL>
           <FL label="שם המדריך/ה" req><select required value={form.inst} onChange={e=>setForm({...form,inst:e.target.value})}><option value="">בחר מדריך/ה</option>{INST[user.gender].map((x,i)=><option key={i} value={x.name}>{x.name}</option>)}</select></FL>
         </div>
-        {flds.map(([k,l,r])=><FL key={k} label={l} req={r}><textarea required={r} value={form[k]} rows={3} onChange={e=>setForm({...form,[k]:e.target.value})} style={{resize:'vertical'}}/></FL>)}
+        {flds.map(([k,l,r,h])=><FL key={k} label={l} req={r} help={h}><textarea required={r} value={form[k]} rows={3} onChange={e=>setForm({...form,[k]:e.target.value})} style={{resize:'vertical'}}/></FL>)}
         <div style={{display:'flex',gap:'9px'}}><button type="submit" className="btn-p" style={{flex:1,padding:'11px',borderRadius:'10px',fontWeight:700,border:'none',cursor:'pointer'}}>שמור</button><button type="button" onClick={reset} style={{padding:'11px 18px',borderRadius:'10px',background:'rgba(0,0,0,.06)',color:'var(--txt)',fontWeight:600,border:'none',cursor:'pointer'}}>ביטול</button></div>
       </form>
     </div>)}
@@ -1739,16 +1755,17 @@ function CasePresentation({user,updateUser,req,siteC}){
   const cases=user.cases||[];const curC=curRecs(user.cases,user.year);const rn=req.c||1;
   const insts=CASE_INST;
   const reqFile=siteC&&siteC.caseReqFile;
-  const ef={title:'',date:'',inst:'',presentation:null,summary:null};
+  const ef={title:'',date:'',inst:'',presentation:null,summary:null,assignment:null};
   const [show,setShow]=useState(false);const [editId,setEditId]=useState(null);const [form,setForm]=useState(ef);
   const [ulP,setUlP]=useState(false);const [progP,setProgP]=useState(null);
   const [ulS,setUlS]=useState(false);const [progS,setProgS]=useState(null);
+  const [ulA,setUlA]=useState(false);const [progA,setProgA]=useState(null);
   const reset=()=>{setForm(ef);setShow(false);setEditId(null);};
   const attach=async(e,which)=>{
     const f=e.target.files[0];if(!f)return;
     const ext=(f.name.split('.').pop()||'').toLowerCase();
-    if(!['pdf','doc','docx'].includes(ext)){alert('PDF או Word בלבד');return;}
-    const setUl=which==='presentation'?setUlP:setUlS,setProg=which==='presentation'?setProgP:setProgS;
+    if(!['pdf','doc','docx','jpg','jpeg'].includes(ext)){alert('PDF, Word או JPEG בלבד');return;}
+    const setUl=which==='presentation'?setUlP:which==='summary'?setUlS:setUlA,setProg=which==='presentation'?setProgP:which==='summary'?setProgS:setProgA;
     setUl(true);setProg(0);
     try{const r=await upFile(f,user.id,'cases',p=>setProg(p));setForm(prev=>({...prev,[which]:{url:r.url,name:r.name,at:r.at}}));}
     catch(err){console.error(err);alert('שגיאה בהעלאה: '+(err.message||err.code||String(err)));}
@@ -1756,13 +1773,13 @@ function CasePresentation({user,updateUser,req,siteC}){
   };
   const save=()=>{
     if(!form.title.trim()){alert('נא להזין כותרת');return;}
-    if(!form.presentation&&!form.summary){alert('נא לצרף לפחות קובץ אחד');return;}
+    if(!form.presentation&&!form.summary&&!form.assignment){alert('נא לצרף לפחות קובץ אחד');return;}
     const a=[...cases];
-    if(editId){const i=a.findIndex(x=>x.id===editId);if(i>=0)a[i]={...a[i],title:form.title,date:form.date,inst:form.inst,presentation:form.presentation,summary:form.summary};}
-    else a.push({id:Date.now().toString(),yr:user.year,title:form.title,date:form.date,inst:form.inst,presentation:form.presentation,summary:form.summary});
+    if(editId){const i=a.findIndex(x=>x.id===editId);if(i>=0)a[i]={...a[i],title:form.title,date:form.date,inst:form.inst,presentation:form.presentation,summary:form.summary,assignment:form.assignment};}
+    else a.push({id:Date.now().toString(),yr:user.year,title:form.title,date:form.date,inst:form.inst,presentation:form.presentation,summary:form.summary,assignment:form.assignment});
     updateUser({cases:a});reset();alert('נשמר');
   };
-  const startEdit=c=>{setForm({title:c.title||c.name||'',date:c.date||'',inst:c.inst||'',presentation:c.presentation||(c.url?{url:c.url,name:c.name,at:c.at}:null),summary:c.summary||null});setEditId(c.id);setShow(true);window.scrollTo({top:0,behavior:'smooth'});};
+  const startEdit=c=>{setForm({title:c.title||c.name||'',date:c.date||'',inst:c.inst||'',presentation:c.presentation||(c.url?{url:c.url,name:c.name,at:c.at}:null),summary:c.summary||null,assignment:c.assignment||null});setEditId(c.id);setShow(true);window.scrollTo({top:0,behavior:'smooth'});};
   const del=id=>{if(confirm('למחוק את הצגת המקרה?'))updateUser({cases:cases.filter(x=>x.id!==id)});};
   const fileChip=(label,file)=>file&&file.url?(
     <div key={label} style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:'8px',padding:'8px 11px',borderRadius:'8px',background:'rgba(16,185,129,.07)',border:'1px solid rgba(16,185,129,.18)',marginTop:'6px'}}>
@@ -1781,6 +1798,7 @@ function CasePresentation({user,updateUser,req,siteC}){
       </div>
       {fileChip('הצגת מקרה',c.presentation||(c.url?{url:c.url,name:c.name}:null))}
       {fileChip('סיכום ותובנות',c.summary)}
+      {fileChip('קובץ שיבוץ להצגת מקרה ביומן',c.assignment)}
     </div>
   );
   return(<div>
@@ -1792,20 +1810,25 @@ function CasePresentation({user,updateUser,req,siteC}){
     {show&&<div className="card" style={{padding:'20px',marginBottom:'14px'}}>
       <h3 style={{margin:'0 0 14px',fontSize:'.95rem',fontWeight:700,color:'var(--txt)'}}>{editId?'עריכת הצגת מקרה':'הצגת מקרה חדשה'}</h3>
       <div style={{display:'flex',flexDirection:'column',gap:'12px'}}>
-        <FL label="כותרת" req><input type="text" value={form.title} onChange={e=>setForm({...form,title:e.target.value})} placeholder="כותרת המקרה"/></FL>
+        <FL label="כותרת" req help="נושא המקרה"><input type="text" value={form.title} onChange={e=>setForm({...form,title:e.target.value})} placeholder="כותרת המקרה"/></FL>
         <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'12px'}}>
-          <FL label="תאריך"><input type="date" value={form.date} onChange={e=>setForm({...form,date:e.target.value})}/></FL>
+          <FL label="תאריך הצגה"><input type="date" value={form.date} onChange={e=>setForm({...form,date:e.target.value})}/></FL>
           <FL label="מדריך/ה"><select value={form.inst} onChange={e=>setForm({...form,inst:e.target.value})}><option value="">בחר/י מדריך/ה</option>{insts.map((x,i)=><option key={i} value={x.name}>{x.name}</option>)}</select></FL>
         </div>
         <div>
           <label className="fl-label">קובץ הצגת מקרה</label>
           {form.presentation&&<p style={{margin:'2px 0 5px',fontSize:'.8rem',color:'#059669',fontWeight:600}}>✓ {form.presentation.name}</p>}
-          <UB onUpload={e=>attach(e,'presentation')} uploading={ulP} progress={progP} label={form.presentation?'החלף קובץ הצגה':'צרף קובץ הצגה'}/>
+          <UB onUpload={e=>attach(e,'presentation')} uploading={ulP} progress={progP} label={form.presentation?'החלף קובץ הצגה':'צרף קובץ הצגה'} accept=".pdf,.doc,.docx,.jpg,.jpeg"/>
         </div>
         <div>
           <label className="fl-label">קובץ סיכום ותובנות</label>
           {form.summary&&<p style={{margin:'2px 0 5px',fontSize:'.8rem',color:'#059669',fontWeight:600}}>✓ {form.summary.name}</p>}
-          <UB onUpload={e=>attach(e,'summary')} uploading={ulS} progress={progS} label={form.summary?'החלף קובץ סיכום':'צרף קובץ סיכום'}/>
+          <UB onUpload={e=>attach(e,'summary')} uploading={ulS} progress={progS} label={form.summary?'החלף קובץ סיכום':'צרף קובץ סיכום'} accept=".pdf,.doc,.docx,.jpg,.jpeg"/>
+        </div>
+        <div>
+          <label className="fl-label">קובץ שיבוץ להצגת מקרה ביומן</label>
+          {form.assignment&&<p style={{margin:'2px 0 5px',fontSize:'.8rem',color:'#059669',fontWeight:600}}>✓ {form.assignment.name}</p>}
+          <UB onUpload={e=>attach(e,'assignment')} uploading={ulA} progress={progA} label={form.assignment?'החלף קובץ שיבוץ':'צרף קובץ שיבוץ'} accept=".pdf,.doc,.docx,.jpg,.jpeg"/>
         </div>
         <div style={{display:'flex',gap:'9px',paddingTop:'4px'}}>
           <button onClick={save} className="btn-p" style={{flex:1,padding:'11px',borderRadius:'10px',fontWeight:700,border:'none',cursor:'pointer'}}>שמור</button>
@@ -1820,14 +1843,43 @@ function CasePresentation({user,updateUser,req,siteC}){
 }
 
 function ProficiencyTests({user,updateUser,req}){
-  const [f,setF]=useState({date:'',topic:'',grade:''});const tests=user.proficiency||[];const curT=curRecs(user.proficiency,user.year);const rn=req.pr||2;
-  const add=()=>{if(!f.date||!f.topic){alert('נא למלא תאריך ונושא');return;}updateUser({proficiency:[...tests,{id:Date.now(),yr:user.year,...f}]});setF({date:'',topic:'',grade:''});alert('מבחן נוסף');};
+  const ef={date:'',topic:'',grade:'',examLink:'',examFile:null,reviewFile:null};
+  const [f,setF]=useState(ef);const tests=user.proficiency||[];const curT=curRecs(user.proficiency,user.year);const rn=req.pr||2;
+  const [ulE,setUlE]=useState(false);const [progE,setProgE]=useState(null);
+  const [ulR,setUlR]=useState(false);const [progR,setProgR]=useState(null);
+  const attach=async(e,which)=>{
+    const file=e.target.files[0];if(!file)return;
+    const ext=(file.name.split('.').pop()||'').toLowerCase();
+    if(!['pdf','doc','docx'].includes(ext)){alert('PDF או Word בלבד');return;}
+    const setUl=which==='examFile'?setUlE:setUlR,setProg=which==='examFile'?setProgE:setProgR;
+    setUl(true);setProg(0);
+    try{const r=await upFile(file,user.id,'proficiency',p=>setProg(p));setF(prev=>({...prev,[which]:{url:r.url,name:r.name,at:r.at}}));}
+    catch(err){console.error(err);alert('שגיאה בהעלאה: '+(err.message||err.code||String(err)));}
+    setUl(false);setProg(null);e.target.value='';
+  };
+  const add=()=>{if(!f.date||!f.topic){alert('נא למלא תאריך ונושא');return;}updateUser({proficiency:[...tests,{id:Date.now(),yr:user.year,...f}]});setF(ef);alert('מבחן נוסף');};
   return(<div><SH title="מבחני בקיאות" sub={`${curT.length} / ${rn} מבחנים`} done={curT.length} total={rn} color="#C4896E" onAdd={()=>{}} adding={false}/>
     <div className="card" style={{padding:'20px',marginBottom:'12px'}}>
       <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:'11px'}}><FL label="תאריך"><input type="date" value={f.date} onChange={e=>setF({...f,date:e.target.value})}/></FL><FL label="נושא"><input type="text" value={f.topic} onChange={e=>setF({...f,topic:e.target.value})}/></FL><FL label="ציון (אופציונלי)"><input type="text" value={f.grade} onChange={e=>setF({...f,grade:e.target.value})}/></FL></div>
-      <button onClick={add} className="btn-p" style={{width:'100%',padding:'10px',borderRadius:'10px',fontWeight:700,marginTop:'11px',border:'none',cursor:'pointer'}}>הוסף מבחן</button>
+      <div style={{marginTop:'11px'}}>
+        <FL label="מבחן — קישור (למשל Google Forms)"><input type="text" value={f.examLink} onChange={e=>setF({...f,examLink:e.target.value})} placeholder="https://..."/></FL>
+        {f.examFile&&<p style={{margin:'2px 0 5px',fontSize:'.8rem',color:'#059669',fontWeight:600}}>✓ {f.examFile.name}</p>}
+        <UB onUpload={e=>attach(e,'examFile')} uploading={ulE} progress={progE} label={f.examFile?'החלף קובץ מבחן':'או צרף קובץ מבחן'}/>
+      </div>
+      <div style={{marginTop:'11px'}}>
+        <label className="fl-label">שאלות חזרה (PDF)</label>
+        {f.reviewFile&&<p style={{margin:'2px 0 5px',fontSize:'.8rem',color:'#059669',fontWeight:600}}>✓ {f.reviewFile.name}</p>}
+        <UB onUpload={e=>attach(e,'reviewFile')} uploading={ulR} progress={progR} label={f.reviewFile?'החלף קובץ שאלות חזרה':'צרף קובץ שאלות חזרה'}/>
+      </div>
+      <button onClick={add} className="btn-p" style={{width:'100%',padding:'10px',borderRadius:'10px',fontWeight:700,marginTop:'14px',border:'none',cursor:'pointer'}}>הוסף מבחן</button>
     </div>
-    {curT.map((t,i)=>(<div key={t.id} className="card" style={{padding:'13px',marginBottom:'7px'}}><div style={{display:'flex',justifyContent:'space-between'}}><p style={{margin:0,fontWeight:700,color:'var(--txt)',fontSize:'.87rem'}}>מבחן #{i+1} — {t.date?new Date(t.date).toLocaleDateString('he-IL'):''}</p><button onClick={()=>updateUser({proficiency:tests.filter(x=>x.id!==t.id)})} style={{background:'none',border:'none',color:'#ef4444',cursor:'pointer',fontWeight:600,fontSize:'.79rem'}}>מחק</button></div><p style={{margin:'3px 0 0',fontSize:'.83rem',color:'var(--sub)'}}>נושא: {t.topic}{t.grade?` | ציון: ${t.grade}`:''}</p></div>))}
+    {curT.map((t,i)=>(<div key={t.id} className="card" style={{padding:'13px',marginBottom:'7px'}}>
+      <div style={{display:'flex',justifyContent:'space-between'}}><p style={{margin:0,fontWeight:700,color:'var(--txt)',fontSize:'.87rem'}}>מבחן #{i+1} — {t.date?new Date(t.date).toLocaleDateString('he-IL'):''}</p><button onClick={()=>updateUser({proficiency:tests.filter(x=>x.id!==t.id)})} style={{background:'none',border:'none',color:'#ef4444',cursor:'pointer',fontWeight:600,fontSize:'.79rem'}}>מחק</button></div>
+      <p style={{margin:'3px 0 0',fontSize:'.83rem',color:'var(--sub)'}}>נושא: {t.topic}{t.grade?` | ציון: ${t.grade}`:''}</p>
+      {t.examLink&&<p style={{margin:'5px 0 0',fontSize:'.81rem'}}><a href={t.examLink} target="_blank" style={{color:'#C4896E',fontWeight:600}}>קישור למבחן</a></p>}
+      {t.examFile&&t.examFile.url&&<p style={{margin:'5px 0 0',fontSize:'.81rem'}}><a href="#" onClick={e=>{e.preventDefault();openFileUrl(t.examFile.url,t.examFile.name);}} style={{color:'#C4896E',fontWeight:600,cursor:'pointer'}}>קובץ מבחן: {t.examFile.name}</a></p>}
+      {t.reviewFile&&t.reviewFile.url&&<p style={{margin:'5px 0 0',fontSize:'.81rem'}}><a href="#" onClick={e=>{e.preventDefault();openFileUrl(t.reviewFile.url,t.reviewFile.name);}} style={{color:'#C4896E',fontWeight:600,cursor:'pointer'}}>שאלות חזרה: {t.reviewFile.name}</a></p>}
+    </div>))}
     <ArchiveList recs={pastRecs(user.proficiency,user.year)} label={r=>r.topic||'מבחן'} preview={r=>r.grade?`ציון: ${r.grade}`:null}/>
   </div>);
 }
@@ -1867,7 +1919,7 @@ function UpdatesPage({user,updateUser,updates}){
   },[]);
   return(
     <div>
-      <h2 style={{fontSize:'1.25rem',fontWeight:800,color:'var(--txt)',margin:'0 0 16px'}}>עדכונים</h2>
+      <h2 style={{fontSize:'1.25rem',fontWeight:800,color:'var(--txt)',margin:'0 0 16px'}}>צעדים ראשוניים</h2>
       {updates.length===0?
         <div className="card" style={{padding:'40px',textAlign:'center'}}>
           <p style={{color:'var(--sub)',fontSize:'.9rem'}}>אין עדכונים כרגע</p>
@@ -1926,12 +1978,13 @@ function Contacts({user}){
     </div>
     {insts.map((x,i)=>(
       <div key={i} className="card" style={{padding:'14px 18px',marginBottom:'8px',display:'flex',justifyContent:'space-between',alignItems:'center',flexWrap:'wrap',gap:'9px'}}>
-        <p style={{margin:0,fontWeight:700,color:'var(--txt)',fontSize:'.92rem'}}>{x.name}</p>
+        <p style={{margin:0,fontWeight:700,color:'var(--txt)',fontSize:'.92rem'}}>{x.name}{MALE_ONLY_CONTACTS.includes(x.name)&&<span style={{fontWeight:600,color:'var(--sub)',fontSize:'.78rem'}}> (לגברים בלבד)</span>}</p>
         <div style={{textAlign:'left'}}>
           {x.wa
             ? <span style={{fontSize:'.88rem',color:'var(--sub)',fontWeight:600,direction:'ltr',display:'block'}}>{x.wa}</span>
             : <span style={{fontSize:'.82rem',color:'var(--sub)',display:'block'}}>דרך המשרד: {OFFICE_TEL}</span>
           }
+          {x.email&&<span style={{fontSize:'.8rem',color:'var(--sub)',direction:'ltr',display:'block',marginTop:'2px'}}>{x.email}</span>}
           {x.note&&<p style={{margin:'3px 0 0',fontSize:'.73rem',color:'var(--sub)'}}>{x.note}</p>}
         </div>
       </div>
