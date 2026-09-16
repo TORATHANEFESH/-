@@ -305,20 +305,37 @@ function showFilePreview(blobUrl,name){
   document.body.appendChild(ov);
   document.addEventListener('keydown',function esc(e){if(e.key==='Escape'){ov.remove();document.removeEventListener('keydown',esc);}});
 }
+async function loadFsBlob(url,name){
+  if(!url||!url.startsWith('#fsfile:'))return null;
+  const fileId=url.substring(8);
+  const doc=await db.collection('fileStore').doc(fileId).get();
+  if(!doc.exists){alert('הקובץ לא נמצא');return null;}
+  const meta=doc.data();let base64='';
+  for(let i=0;i<meta.chunkCount;i++){
+    const chunk=await db.collection('fileStore').doc(fileId).collection('chunks').doc(String(i)).get();
+    if(chunk.exists)base64+=chunk.data().data;
+  }
+  const blob=dataURLtoBlob(base64);
+  return {blobUrl:URL.createObjectURL(blob),name:meta.name||name||''};
+}
+async function downloadFileUrl(url,name){
+  try{
+    if(url&&url.startsWith('#fsfile:')){
+      const r=await loadFsBlob(url,name);
+      if(!r)return;
+      const a=document.createElement('a');a.href=r.blobUrl;a.download=r.name||'file';
+      document.body.appendChild(a);a.click();a.remove();
+    }else{
+      window.open(url,'_blank');
+    }
+  }catch(e){alert('שגיאה בהורדת הקובץ: '+e.message);}
+}
 async function openFileUrl(url,name){
   if(url&&url.startsWith('#fsfile:')){
-    const fileId=url.substring(8);
     try{
-      const doc=await db.collection('fileStore').doc(fileId).get();
-      if(!doc.exists){alert('הקובץ לא נמצא');return;}
-      const meta=doc.data();let base64='';
-      for(let i=0;i<meta.chunkCount;i++){
-        const chunk=await db.collection('fileStore').doc(fileId).collection('chunks').doc(String(i)).get();
-        if(chunk.exists)base64+=chunk.data().data;
-      }
-      const blob=dataURLtoBlob(base64);
-      const blobUrl=URL.createObjectURL(blob);
-      showFilePreview(blobUrl,meta.name||name||'');
+      const r=await loadFsBlob(url,name);
+      if(!r)return;
+      showFilePreview(r.blobUrl,r.name);
     }catch(e){alert('שגיאה בפתיחת הקובץ: '+e.message);}
   }else{
     const driveId=getDriveFileId(url);
@@ -1695,6 +1712,19 @@ function RC({badge,bc,meta,onEdit,onDelete,expanded,onToggle,children,preview}){
     </div>
   );
 }
+// כרטיס קובץ הנחיה/עזר עם שתי אפשרויות פתוחות — צפייה (תצוגה מקדימה) והורדה (שמירה בפועל)
+function RefFileCard({icon,label,file,color}){
+  if(!file||!file.url)return null;
+  return(
+    <div className="card" style={{padding:'13px 15px',marginBottom:'8px',display:'flex',justifyContent:'space-between',alignItems:'center',gap:'10px',flexWrap:'wrap'}}>
+      <span style={{fontWeight:700,fontSize:'.86rem',color:'var(--txt)'}}>{icon} {label}</span>
+      <div style={{display:'flex',gap:'6px'}}>
+        <a href="#" onClick={e=>{e.preventDefault();openFileUrl(file.url,file.name);}} style={{padding:'6px 13px',borderRadius:'9px',background:color,color:'white',fontWeight:700,fontSize:'.79rem',textDecoration:'none'}}>צפייה</a>
+        <a href="#" onClick={e=>{e.preventDefault();downloadFileUrl(file.url,file.name);}} style={{padding:'6px 13px',borderRadius:'9px',background:'rgba(0,0,0,.07)',color:'var(--txt)',fontWeight:700,fontSize:'.79rem',textDecoration:'none'}}>הורדה</a>
+      </div>
+    </div>
+  );
+}
 function UB({onUpload,uploading,label,progress,accept}){
   const r=40,c=2*Math.PI*r,pct=progress||0,off=c-(pct/100)*c;
   return(
@@ -1815,11 +1845,6 @@ function CasePresentation({user,updateUser,req,siteC}){
   const reqFile=siteC&&siteC.caseReqFile;
   const guideFile=siteC&&(user.gender==='female'?siteC.caseGuideFemale:siteC.caseGuideMale);
   const summaryGuideFile=siteC&&siteC.caseSummaryGuide;
-  const refLink=(icon,label,file,color)=>file&&file.url?(
-    <div className="card" style={{padding:'11px 15px',marginBottom:'8px',display:'flex',justifyContent:'space-between',alignItems:'center',gap:'10px',flexWrap:'wrap'}}>
-      <span style={{fontWeight:700,fontSize:'.85rem',color:'var(--txt)'}}>{icon} {label}</span>
-      <a href="#" onClick={e=>{e.preventDefault();openFileUrl(file.url,file.name);}} style={{padding:'6px 14px',borderRadius:'9px',background:color,color:'white',fontWeight:700,fontSize:'.79rem',textDecoration:'none'}}>הורדה</a>
-    </div>):null;
   const ef={title:'',date:'',inst:'',presentation:null,summary:null,assignment:null};
   const [show,setShow]=useState(false);const [editId,setEditId]=useState(null);const [form,setForm]=useState(ef);
   const [ulP,setUlP]=useState(false);const [progP,setProgP]=useState(null);
@@ -1868,12 +1893,9 @@ function CasePresentation({user,updateUser,req,siteC}){
   );
   return(<div>
     <SH title="הצגת מקרה" sub="הצגה + סיכום ותובנות, עם כותרת לכל מקרה" done={curC.length} total={rn} color="#524686" onAdd={()=>{setForm(ef);setEditId(null);setShow(!show);}} adding={show}/>
-    {reqFile&&reqFile.url&&<div className="card" style={{padding:'13px 15px',marginBottom:'8px',display:'flex',justifyContent:'space-between',alignItems:'center',gap:'10px',flexWrap:'wrap'}}>
-      <span style={{fontWeight:700,fontSize:'.86rem',color:'var(--txt)'}}>📋 דרישות להצגת מקרה ולעבודה המסכמת</span>
-      <a href="#" onClick={e=>{e.preventDefault();openFileUrl(reqFile.url,reqFile.name);}} style={{padding:'6px 14px',borderRadius:'9px',background:'#524686',color:'white',fontWeight:700,fontSize:'.8rem',textDecoration:'none'}}>הורדת קובץ הדרישות</a>
-    </div>}
-    {refLink('📝','הנחיות להצגת מקרה',guideFile,'#765C74')}
-    {refLink('📄','סיכום הצגת מקרה',summaryGuideFile,'#A87071')}
+    <RefFileCard icon="📋" label="דרישות להצגת מקרה ולעבודה המסכמת" file={reqFile} color="#524686"/>
+    <RefFileCard icon="📝" label="הנחיות להצגת מקרה" file={guideFile} color="#765C74"/>
+    <RefFileCard icon="📄" label="סיכום הצגת מקרה" file={summaryGuideFile} color="#A87071"/>
     {show&&<div className="card" style={{padding:'20px',marginBottom:'14px'}}>
       <h3 style={{margin:'0 0 14px',fontSize:'.95rem',fontWeight:700,color:'var(--txt)'}}>{editId?'עריכת הצגת מקרה':'הצגת מקרה חדשה'}</h3>
       <div style={{display:'flex',flexDirection:'column',gap:'12px'}}>
@@ -1928,14 +1950,8 @@ function ProficiencyTests({user,updateUser,req,siteC}){
   };
   const add=()=>{if(!f.date||!f.topic){alert('נא למלא תאריך ונושא');return;}updateUser({proficiency:[...tests,{id:Date.now(),yr:user.year,...f}]});setF(ef);alert('מבחן נוסף');};
   return(<div><SH title="מבחני בקיאות" sub={`${curT.length} / ${rn} מבחנים`} done={curT.length} total={rn} color="#C4896E" onAdd={()=>{}} adding={false}/>
-    {examMaterialsFile&&examMaterialsFile.url&&<div className="card" style={{padding:'13px 15px',marginBottom:'8px',display:'flex',justifyContent:'space-between',alignItems:'center',gap:'10px',flexWrap:'wrap'}}>
-      <span style={{fontWeight:700,fontSize:'.86rem',color:'var(--txt)'}}>📋 מבחני בקיאות (חומר)</span>
-      <a href="#" onClick={e=>{e.preventDefault();openFileUrl(examMaterialsFile.url,examMaterialsFile.name);}} style={{padding:'6px 14px',borderRadius:'9px',background:'#C4896E',color:'white',fontWeight:700,fontSize:'.8rem',textDecoration:'none'}}>הורדה</a>
-    </div>}
-    {reviewSheetsFile&&reviewSheetsFile.url&&<div className="card" style={{padding:'13px 15px',marginBottom:'12px',display:'flex',justifyContent:'space-between',alignItems:'center',gap:'10px',flexWrap:'wrap'}}>
-      <span style={{fontWeight:700,fontSize:'.86rem',color:'var(--txt)'}}>📝 דפי חזרה למבחן</span>
-      <a href="#" onClick={e=>{e.preventDefault();openFileUrl(reviewSheetsFile.url,reviewSheetsFile.name);}} style={{padding:'6px 14px',borderRadius:'9px',background:'#C4896E',color:'white',fontWeight:700,fontSize:'.8rem',textDecoration:'none'}}>הורדה</a>
-    </div>}
+    <RefFileCard icon="📋" label="מבחני בקיאות (חומר)" file={examMaterialsFile} color="#C4896E"/>
+    <RefFileCard icon="📝" label="דפי חזרה למבחן" file={reviewSheetsFile} color="#C4896E"/>
     <div className="card" style={{padding:'20px',marginBottom:'12px'}}>
       <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:'11px'}}><FL label="תאריך"><input type="date" value={f.date} onChange={e=>setF({...f,date:e.target.value})}/></FL><FL label="נושא"><input type="text" value={f.topic} onChange={e=>setF({...f,topic:e.target.value})}/></FL><FL label="ציון (אופציונלי)"><input type="text" value={f.grade} onChange={e=>setF({...f,grade:e.target.value})}/></FL></div>
       <div style={{marginTop:'11px'}}>
@@ -1967,14 +1983,8 @@ function FinalProject({user,updateUser,siteC}){
   const finalAssignFile=siteC&&siteC.plaFinalAssignment;
   const upload=async e=>{const f=e.target.files[0];if(!f)return;const ext3=(f.name.split('.').pop()||'').toLowerCase();if(!['pdf','doc','docx'].includes(ext3)){alert('PDF או Word בלבד');return;}setUl(true);setProg(0);try{const r=await upFile(f,user.id,'final',p=>setProg(p));updateUser({finalProject:r});alert('העבודה הועלתה!');}catch(e){console.error(e);alert('שגיאה בהעלאה: '+(e.message||e.code||String(e)));}setUl(false);setProg(null);e.target.value='';};
   return(<div><SH title="עבודה מסכמת" sub="העלאת קובץ PDF או Word" done={proj?1:0} total={1} color="#E88F6A" onAdd={()=>{}} adding={false}/>
-    {reqFile&&reqFile.url&&<div className="card" style={{padding:'13px 15px',marginBottom:'8px',display:'flex',justifyContent:'space-between',alignItems:'center',gap:'10px',flexWrap:'wrap'}}>
-      <span style={{fontWeight:700,fontSize:'.86rem',color:'var(--txt)'}}>📋 דרישות לעבודה המסכמת</span>
-      <a href="#" onClick={e=>{e.preventDefault();openFileUrl(reqFile.url,reqFile.name);}} style={{padding:'6px 14px',borderRadius:'9px',background:'#E88F6A',color:'white',fontWeight:700,fontSize:'.8rem',textDecoration:'none'}}>הורדת קובץ הדרישות</a>
-    </div>}
-    {finalAssignFile&&finalAssignFile.url&&<div className="card" style={{padding:'13px 15px',marginBottom:'12px',display:'flex',justifyContent:'space-between',alignItems:'center',gap:'10px',flexWrap:'wrap'}}>
-      <span style={{fontWeight:700,fontSize:'.86rem',color:'var(--txt)'}}>📌 מטלה מסכמת</span>
-      <a href="#" onClick={e=>{e.preventDefault();openFileUrl(finalAssignFile.url,finalAssignFile.name);}} style={{padding:'6px 14px',borderRadius:'9px',background:'#E88F6A',color:'white',fontWeight:700,fontSize:'.8rem',textDecoration:'none'}}>הורדה</a>
-    </div>}
+    <RefFileCard icon="📋" label="דרישות לעבודה המסכמת" file={reqFile} color="#E88F6A"/>
+    <RefFileCard icon="📌" label="מטלה מסכמת" file={finalAssignFile} color="#E88F6A"/>
     <div className="card" style={{padding:'26px',textAlign:'center'}}>
       {!proj?<><p style={{color:'var(--sub)',marginBottom:'14px'}}>טרם הועלתה עבודה מסכמת</p><UB onUpload={upload} uploading={ul} progress={prog}/><p style={{color:'var(--sub)',fontSize:'.72rem',marginTop:'5px'}}>מקסימום 10MB</p></>
       :<><div style={{padding:'13px 15px',borderRadius:'11px',background:'rgba(16,185,129,.07)',border:'1px solid rgba(16,185,129,.2)',marginBottom:'13px',textAlign:'right'}}><p style={{margin:'0 0 2px',fontWeight:700,color:'#059669',fontSize:'.88rem'}}>העבודה הועלתה</p><p style={{margin:'0 0 1px',fontSize:'.87rem',color:'var(--txt)'}}>{proj.name}</p><p style={{margin:0,fontSize:'.75rem',color:'var(--sub)'}}>{proj.at?new Date(proj.at).toLocaleDateString('he-IL'):''}</p></div>

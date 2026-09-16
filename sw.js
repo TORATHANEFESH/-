@@ -1,4 +1,4 @@
-const CACHE = 'torathanefesh-v2';
+const CACHE = 'torathanefesh-v3';
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(['/'])));
