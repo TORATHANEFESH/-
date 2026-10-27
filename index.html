@@ -975,7 +975,7 @@ function TeacherStudentDetail({u,stuUploads,setUploads}){
     {id:'practical',l:`התנסות (${(u.practical||[]).length})`},
     {id:'supervision',l:`הדרכות (${(u.supervision||[]).length})`},
     {id:'cases',l:`הצגות מקרה (${(u.cases||[]).length})`},
-    {id:'peer',l:`הצגה של חברה (${(u.peer||[]).length})`},
+    {id:'peer',l:`הצגות של חברה בכיתה (${(u.peer||[]).length})`},
     {id:'proficiency',l:`בקיאות (${(u.proficiency||[]).length})`},
     {id:'final',l:'עבודה מסכמת'},
     {id:'files',l:`קבצים (${stuUploads.length})`},
@@ -998,7 +998,7 @@ function TeacherStudentDetail({u,stuUploads,setUploads}){
       {tab==='overview'&&(
         <div>
           <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(120px,1fr))',gap:'8px',marginBottom:'14px'}}>
-            {[['התנסות',(u.practical||[]).length,'#1E244B','practical'],['הדרכות',(u.supervision||[]).length,'#524686','supervision'],['הצגות מקרה',(u.cases||[]).length,'#765C74','cases'],['הצגה של חברה',(u.peer||[]).length,'#0d9488','peer'],['בקיאות',(u.proficiency||[]).length,'#C4896E','proficiency']].map(([l,n,col,tid])=>(
+            {[['התנסות',(u.practical||[]).length,'#1E244B','practical'],['הדרכות',(u.supervision||[]).length,'#524686','supervision'],['הצגות מקרה',(u.cases||[]).length,'#765C74','cases'],['הצגות של חברה בכיתה',(u.peer||[]).length,'#0d9488','peer'],['בקיאות',(u.proficiency||[]).length,'#C4896E','proficiency']].map(([l,n,col,tid])=>(
               <div key={l} style={{padding:'10px',borderRadius:'9px',background:col+'15',borderRight:`3px solid ${col}`,cursor:'pointer'}} onClick={()=>setTab(tid)}>
                 <p style={{margin:'0 0 2px',fontSize:'.7rem',color:'#6b7280',fontWeight:600}}>{l}</p>
                 <p style={{margin:0,fontSize:'1.4rem',fontWeight:800,color:col,lineHeight:1}}>{n}</p>
@@ -1082,7 +1082,7 @@ function TeacherStudentDetail({u,stuUploads,setUploads}){
           (u.peer||[]).map((r,i)=>(
             <SectionCard key={r.id||i} bg="#f0fdfa" header={
               <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
-                <span style={{fontWeight:700,fontSize:'.87rem',color:'#0f766e'}}>הצגה של חברה{r.presenter?` — ${r.presenter}`:''}</span>
+                <span style={{fontWeight:700,fontSize:'.87rem',color:'#0f766e'}}>הצגה של חברה בכיתה{r.presenter?` — ${r.presenter}`:''}</span>
                 <span style={{fontSize:'.78rem',color:'#6b7280'}}>{r.date?new Date(r.date).toLocaleDateString('he-IL'):''}</span>
               </div>
             }>
@@ -1494,7 +1494,7 @@ function MainApp({user,updateUser,view,setView,onLogout,onLogo,reqOv,siteC,updat
   const unreadCount=updates.filter(u=>!readUps.includes(u.id)).length;
   const nav=[
     {id:'dashboard',l:'סקירה'},{id:'practical',l:'שעות התנסות'},
-    {id:'supervision',l:'הדרכות אישיות'},{id:'case',l:'הצגת מקרה'},{id:'peer',l:'הצגה של חברה'},
+    {id:'supervision',l:'הדרכות אישיות'},{id:'case',l:'הצגת מקרה'},{id:'peer',l:'הצגות של חברה בכיתה'},
     ...(req.pr?[{id:'proficiency',l:'מבחני בקיאות'}]:[]),
     ...(req.fp?[{id:'finalwork',l:'עבודה מסכמת'}]:[]),
     ...(isFem?[{id:'updates',l:'צעדים ראשוניים'}]:[]),
@@ -1886,7 +1886,7 @@ function PeerPresentations({user,updateUser}){
     <div className="card" style={{padding:'20px',marginBottom:'16px'}}>
       <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',flexWrap:'wrap',gap:'8px'}}>
         <div>
-          <h2 style={{margin:'0 0 2px',fontSize:'1.25rem',fontWeight:800,color:'var(--txt)'}}>הצגה של חברה</h2>
+          <h2 style={{margin:'0 0 2px',fontSize:'1.25rem',fontWeight:800,color:'var(--txt)'}}>הצגות של חברה בכיתה</h2>
           <p style={{margin:0,fontSize:'.8rem',color:'var(--sub)'}}>מה לקחתי מההדרכה הקבוצתית — {items.length} {items.length===1?'דיווח':'דיווחים'} בשנה הנוכחית</p>
         </div>
         <button onClick={()=>{if(show)reset();else setShow(true);}} className="btn-p" style={{padding:'9px 18px',borderRadius:'10px',fontWeight:700,fontSize:'.87rem',border:'none',cursor:'pointer'}}>{show?'סגור':'+ דיווח חדש'}</button>
@@ -1912,7 +1912,7 @@ function PeerPresentations({user,updateUser}){
         <div style={{display:'flex',flexDirection:'column',gap:'9px',marginBottom:'7px'}}>{flds.map(([k,t])=><RS key={k} title={t} content={r[k]}/>)}</div>
       </RC>
     );})}
-    <ArchiveList recs={pastRecs(all,user.year)} label={r=>'הצגה של חברה'+(r.presenter?' — '+r.presenter:'')} preview={r=>r.took}/>
+    <ArchiveList recs={pastRecs(all,user.year)} label={r=>'הצגה של חברה בכיתה'+(r.presenter?' — '+r.presenter:'')} preview={r=>r.took}/>
   </div>);
 }
 
