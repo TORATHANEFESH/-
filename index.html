@@ -1789,9 +1789,10 @@ function PracticalHours({user,updateUser,req}){
   const curP=curRecs(allP,user.year);
   const pk=r=>((r.who||'').trim().toLowerCase())||'__none__';
   const visible=curP.filter(r=>!personFilter||pk(r)===personFilter);
+  const whoSuggest=[...new Set(allP.map(r=>(r.who||'').trim()).filter(Boolean))];
   const sortKey=r=>(r.date||'')+'|'+String(r.num||0).padStart(6,'0');
   const fmt=d=>d?new Date(d).toLocaleDateString('he-IL'):'';
-  const groups=(()=>{const m={};curP.forEach(r=>{const k=pk(r);if(!m[k])m[k]={key:k,name:k==='__none__'?'ללא שיוך':(r.who||'').trim(),rows:[]};m[k].rows.push(r);});
+  const groups=(()=>{const m={};curP.forEach(r=>{const k=pk(r);if(!m[k])m[k]={key:k,name:k==='__none__'?'ללא שם':(r.who||'').trim(),rows:[]};m[k].rows.push(r);});
     return Object.values(m).map(g=>{g.rows.sort((x,y)=>sortKey(x).localeCompare(sortKey(y)));g.last=g.rows[g.rows.length-1];return g;}).sort((x,y)=>((x.key==='__none__')-(y.key==='__none__'))||(y.rows.length-x.rows.length)||x.name.localeCompare(y.name,'he'));})();
   const personName=personFilter?(groups.find(g=>g.key===personFilter)||{}).name||'':'';
   const pill=on=>({padding:'6px 14px',borderRadius:'20px',fontWeight:600,fontSize:'.8rem',cursor:'pointer',border:on?'none':'1px solid var(--brd)',background:on?'linear-gradient(135deg,var(--nf),var(--nt))':'var(--card)',color:on?'white':'var(--txt)'});
@@ -1810,7 +1811,7 @@ function PracticalHours({user,updateUser,req}){
           <FL label="מספר מפגש" req><input type="number" min="1" required value={form.num} onChange={e=>setForm({...form,num:e.target.value})}/></FL>
         </div>
         <div style={{display:'grid',gridTemplateColumns:'1fr',gap:'12px'}}>
-          <FL label="עם מי היה המפגש"><input type="text" value={form.who||''} placeholder="שם פרטי, אות או קוד" onChange={e=>setForm({...form,who:e.target.value})}/></FL>
+          <FL label="שם הנועץ/ת"><input type="text" list="who-suggest" value={form.who||''} placeholder="שם הנועץ/ת" onChange={e=>setForm({...form,who:e.target.value})}/><datalist id="who-suggest">{whoSuggest.map(w=><option key={w} value={w}/>)}</datalist></FL>
         </div>
         {flds.map(([k,l,,h])=><FL key={k} label={l} req help={h}><textarea required value={form[k]} rows={3} onChange={e=>setForm({...form,[k]:e.target.value})} style={{resize:'vertical'}}/></FL>)}
         <div style={{display:'flex',gap:'9px',paddingTop:'4px'}}>
@@ -1824,6 +1825,11 @@ function PracticalHours({user,updateUser,req}){
         <button onClick={()=>setMode('list')} style={pill(mode==='list')}>כל המפגשים</button>
         <button onClick={()=>setMode('people')} style={pill(mode==='people')}>לפי אנשים</button>
       </div>
+      {groups.length>0&&(<div style={{display:'flex',gap:'6px',flexWrap:'wrap',alignItems:'center'}}>
+        <span style={{fontSize:'.78rem',color:'var(--sub)',fontWeight:600}}>נועץ/ת:</span>
+        <button onClick={()=>setPersonFilter('')} style={pill(!personFilter&&mode==='list')}>הכל</button>
+        {groups.map(g=><button key={g.key} onClick={()=>{setPersonFilter(g.key);setMode('list');}} style={pill(personFilter===g.key&&mode==='list')}>{g.name} ({g.rows.length})</button>)}
+      </div>)}
       {personFilter&&mode==='list'&&(<div style={{fontSize:'.8rem',color:'var(--txt)'}}>מוצגים המפגשים עם: <b>{personName}</b>{' '}<button onClick={()=>setPersonFilter('')} style={{background:'none',border:'none',color:'var(--a1)',cursor:'pointer',fontWeight:600,fontSize:'.8rem'}}>הצג הכל ✕</button></div>)}
     </div>)}
     {!curP.length?(<div className="card" style={{padding:'36px',textAlign:'center'}}><p style={{color:'var(--sub)',marginBottom:'12px'}}>טרם דווחו שעות בשנה זו</p><button onClick={()=>setShow(true)} className="btn-p" style={{padding:'9px 20px',borderRadius:'10px',fontWeight:700,border:'none',cursor:'pointer'}}>דיווח ראשון</button></div>)
