@@ -580,7 +580,7 @@ function AdminStudentDetail({uid,users,setUsers,onClose}){
         {tab==='practical'&&(!(u.practical||[]).length?<Empty/>:(u.practical||[]).map((r,i)=>(
           <div key={r.id||i} style={{borderRadius:'10px',border:'1px solid #e5e7eb',marginBottom:'10px',overflow:'hidden'}}>
             <div style={{background:'#eff6ff',padding:'9px 13px',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
-              <div><span style={{fontWeight:700,fontSize:'.87rem',color:'#1e40af'}}>מפגש #{r.num}</span><span style={{marginRight:'8px',fontSize:'.78rem',color:'#6b7280'}}>{r.date?new Date(r.date).toLocaleDateString('he-IL'):''}</span></div>
+              <div><span style={{fontWeight:700,fontSize:'.87rem',color:'#1e40af'}}>מפגש #{r.num}{r.who?` — ${r.who}`:''}{r.cls?` · ${r.cls}`:''}</span><span style={{marginRight:'8px',fontSize:'.78rem',color:'#6b7280'}}>{r.date?new Date(r.date).toLocaleDateString('he-IL'):''}</span></div>
               <DelBtn onClick={()=>delItem('practical',i)}/>
             </div>
             <div style={{padding:'12px'}}>{practFlds.map(([k,l])=><FB key={k} label={l} value={r[k]}/>)}{(r.atts||[r.att]).filter(Boolean).map((att,ai)=><a key={ai} href="#" onClick={e=>{e.preventDefault();openFileUrl(att.url,att.name);}} style={{display:'block',color:'#059669',fontSize:'.81rem',fontWeight:600,textDecoration:'none',cursor:'pointer',marginTop:'4px'}}>📄 {att.name}</a>)}</div>
@@ -975,6 +975,7 @@ function TeacherStudentDetail({u,stuUploads,setUploads}){
     {id:'practical',l:`התנסות (${(u.practical||[]).length})`},
     {id:'supervision',l:`הדרכות (${(u.supervision||[]).length})`},
     {id:'cases',l:`הצגות מקרה (${(u.cases||[]).length})`},
+    {id:'peer',l:`הצגה של חברה (${(u.peer||[]).length})`},
     {id:'proficiency',l:`בקיאות (${(u.proficiency||[]).length})`},
     {id:'final',l:'עבודה מסכמת'},
     {id:'files',l:`קבצים (${stuUploads.length})`},
@@ -997,7 +998,7 @@ function TeacherStudentDetail({u,stuUploads,setUploads}){
       {tab==='overview'&&(
         <div>
           <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(120px,1fr))',gap:'8px',marginBottom:'14px'}}>
-            {[['התנסות',(u.practical||[]).length,'#1E244B','practical'],['הדרכות',(u.supervision||[]).length,'#524686','supervision'],['הצגות מקרה',(u.cases||[]).length,'#765C74','cases'],['בקיאות',(u.proficiency||[]).length,'#C4896E','proficiency']].map(([l,n,col,tid])=>(
+            {[['התנסות',(u.practical||[]).length,'#1E244B','practical'],['הדרכות',(u.supervision||[]).length,'#524686','supervision'],['הצגות מקרה',(u.cases||[]).length,'#765C74','cases'],['הצגה של חברה',(u.peer||[]).length,'#0d9488','peer'],['בקיאות',(u.proficiency||[]).length,'#C4896E','proficiency']].map(([l,n,col,tid])=>(
               <div key={l} style={{padding:'10px',borderRadius:'9px',background:col+'15',borderRight:`3px solid ${col}`,cursor:'pointer'}} onClick={()=>setTab(tid)}>
                 <p style={{margin:'0 0 2px',fontSize:'.7rem',color:'#6b7280',fontWeight:600}}>{l}</p>
                 <p style={{margin:0,fontSize:'1.4rem',fontWeight:800,color:col,lineHeight:1}}>{n}</p>
@@ -1024,7 +1025,7 @@ function TeacherStudentDetail({u,stuUploads,setUploads}){
           (u.practical||[]).map((r,i)=>(
             <SectionCard key={r.id||i} bg="#eff6ff" header={
               <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
-                <span style={{fontWeight:700,fontSize:'.87rem',color:'#1e40af'}}>מפגש #{r.num}</span>
+                <span style={{fontWeight:700,fontSize:'.87rem',color:'#1e40af'}}>מפגש #{r.num}{r.who?` — ${r.who}`:''}{r.cls?` · ${r.cls}`:''}</span>
                 <span style={{fontSize:'.78rem',color:'#6b7280'}}>{r.date?new Date(r.date).toLocaleDateString('he-IL'):''}</span>
               </div>
             }>
@@ -1074,6 +1075,24 @@ function TeacherStudentDetail({u,stuUploads,setUploads}){
         </div>
       )}
 
+
+      {tab==='peer'&&(
+        <div>
+          {!(u.peer||[]).length?<EmptyMsg t="טרם דווחו הצגות של חברות"/>:
+          (u.peer||[]).map((r,i)=>(
+            <SectionCard key={r.id||i} bg="#f0fdfa" header={
+              <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+                <span style={{fontWeight:700,fontSize:'.87rem',color:'#0f766e'}}>הצגה של חברה{r.presenter?` — ${r.presenter}`:''}</span>
+                <span style={{fontSize:'.78rem',color:'#6b7280'}}>{r.date?new Date(r.date).toLocaleDateString('he-IL'):''}</span>
+              </div>
+            }>
+              <FieldBlock label="מה לקחתי" value={r.took}/>
+              <FieldBlock label="איפה זה פוגש אותי בעבודה שלי" value={r.relevance}/>
+              <FieldBlock label="מה נשאר לי פתוח" value={r.open}/>
+            </SectionCard>
+          ))}
+        </div>
+      )}
 
       {tab==='proficiency'&&(
         <div>
@@ -1475,7 +1494,7 @@ function MainApp({user,updateUser,view,setView,onLogout,onLogo,reqOv,siteC,updat
   const unreadCount=updates.filter(u=>!readUps.includes(u.id)).length;
   const nav=[
     {id:'dashboard',l:'סקירה'},{id:'practical',l:'שעות התנסות'},
-    {id:'supervision',l:'הדרכות אישיות'},{id:'case',l:'הצגת מקרה'},
+    {id:'supervision',l:'הדרכות אישיות'},{id:'case',l:'הצגת מקרה'},{id:'peer',l:'הצגה של חברה'},
     ...(req.pr?[{id:'proficiency',l:'מבחני בקיאות'}]:[]),
     ...(req.fp?[{id:'finalwork',l:'עבודה מסכמת'}]:[]),
     ...(isFem?[{id:'updates',l:'צעדים ראשוניים'}]:[]),
@@ -1539,6 +1558,7 @@ function MainApp({user,updateUser,view,setView,onLogout,onLogo,reqOv,siteC,updat
         {view==='practical'&&<PracticalHours user={vu} updateUser={updateUser} req={req}/>}
         {view==='supervision'&&<SupervisionHours user={vu} updateUser={updateUser} req={req}/>}
         {view==='case'&&<CasePresentation user={vu} updateUser={updateUser} req={req} siteC={siteC}/>}
+        {view==='peer'&&<PeerPresentations user={vu} updateUser={updateUser}/>}
         {view==='proficiency'&&<ProficiencyTests user={vu} updateUser={updateUser} req={req} siteC={siteC}/>}
         {view==='finalwork'&&<FinalProject user={vu} updateUser={updateUser} siteC={siteC}/>}
         {view==='updates'&&isFem&&<UpdatesPage user={user} updateUser={updateUser} updates={updates}/>}
@@ -1760,10 +1780,25 @@ function UB({onUpload,uploading,label,progress,accept}){
 
 // ══════════ PRACTICAL HOURS ══════════
 function PracticalHours({user,updateUser,req}){
-  const ef={date:'',num:'',open:'',topics:'',position:'',focus:'',insights:'',nextQuestions:'',challenge:'',lessons:''};
+  const ef={date:'',num:'',who:'',cls:'',open:'',topics:'',position:'',focus:'',insights:'',nextQuestions:'',challenge:'',lessons:''};
   const [show,setShow]=useState(false),[editIdx,setEditIdx]=useState(null),[expIdx,setExpIdx]=useState(null),[ul,setUl]=useState(false),[form,setForm]=useState(ef);
   const reset=()=>{setForm(ef);setShow(false);setEditIdx(null);};
-  const save=e=>{e.preventDefault();const a=[...(user.practical||[])];if(editIdx!==null)a[editIdx]={...form,id:a[editIdx].id,atts:a[editIdx].atts||((a[editIdx].att)?[a[editIdx].att]:[])};else a.push({...form,id:Date.now().toString(),atts:[],yr:user.year});updateUser({practical:a});reset();alert('הדיווח נשמר');};
+  const save=e=>{e.preventDefault();const a=[...(user.practical||[])];if(editIdx!==null)a[editIdx]={...form,who:(form.who||'').trim(),cls:(form.cls||'').trim(),id:a[editIdx].id,atts:a[editIdx].atts||((a[editIdx].att)?[a[editIdx].att]:[])};else a.push({...form,who:(form.who||'').trim(),cls:(form.cls||'').trim(),id:Date.now().toString(),atts:[],yr:user.year});updateUser({practical:a});reset();alert('הדיווח נשמר');};
+  const [mode,setMode]=useState('list'),[clsFilter,setClsFilter]=useState(''),[personFilter,setPersonFilter]=useState('');
+  const allP=user.practical||[];
+  const curP=curRecs(allP,user.year);
+  const cl=r=>(r.cls||'').trim();
+  const pk=r=>((r.who||'').trim().toLowerCase())||'__none__';
+  const clsList=[...new Set(curP.map(cl).filter(Boolean))];
+  const clsSuggest=[...new Set(allP.map(cl).filter(Boolean))];
+  const byCls=curP.filter(r=>!clsFilter||cl(r)===clsFilter);
+  const visible=byCls.filter(r=>!personFilter||pk(r)===personFilter);
+  const sortKey=r=>(r.date||'')+'|'+String(r.num||0).padStart(6,'0');
+  const fmt=d=>d?new Date(d).toLocaleDateString('he-IL'):'';
+  const groups=(()=>{const m={};byCls.forEach(r=>{const k=pk(r);if(!m[k])m[k]={key:k,name:k==='__none__'?'ללא שיוך':(r.who||'').trim(),rows:[]};m[k].rows.push(r);});
+    return Object.values(m).map(g=>{g.rows.sort((x,y)=>sortKey(x).localeCompare(sortKey(y)));g.last=g.rows[g.rows.length-1];return g;}).sort((x,y)=>((x.key==='__none__')-(y.key==='__none__'))||(y.rows.length-x.rows.length)||x.name.localeCompare(y.name,'he'));})();
+  const personName=personFilter?(groups.find(g=>g.key===personFilter)||{}).name||'':'';
+  const pill=on=>({padding:'6px 14px',borderRadius:'20px',fontWeight:600,fontSize:'.8rem',cursor:'pointer',border:on?'none':'1px solid var(--brd)',background:on?'linear-gradient(135deg,var(--nf),var(--nt))':'var(--card)',color:on?'white':'var(--txt)'});
   const [prog,setProg]=useState(null);
   const getAtts=r=>{if(r.atts&&r.atts.length)return r.atts;if(r.att)return[r.att];return[];};
   const attach=async(e,i)=>{const f=e.target.files[0];if(!f)return;const ext1=(f.name.split('.').pop()||'').toLowerCase();if(!['pdf','doc','docx'].includes(ext1)){alert('PDF או Word בלבד');return;}const cur=getAtts((user.practical||[])[i]);if(cur.length>=3){alert('מקסימום 3 קבצים לדיווח');return;}setUl(true);setProg(0);try{const r=await upFile(f,user.id,'practical',p=>setProg(p));const a=[...(user.practical||[])];a[i]={...a[i],atts:[...cur,r]};updateUser({practical:a});alert('קובץ הועלה');}catch(e){console.error(e);alert('שגיאה בהעלאה: '+(e.message||e.code||String(e)));}setUl(false);setProg(null);e.target.value='';}; 
@@ -1778,6 +1813,10 @@ function PracticalHours({user,updateUser,req}){
           <FL label="תאריך" req><input type="date" required value={form.date} onChange={e=>setForm({...form,date:e.target.value})}/></FL>
           <FL label="מספר מפגש" req><input type="number" min="1" required value={form.num} onChange={e=>setForm({...form,num:e.target.value})}/></FL>
         </div>
+        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'12px'}}>
+          <FL label="עם מי היה המפגש"><input type="text" value={form.who||''} placeholder="שם פרטי, אות או קוד" onChange={e=>setForm({...form,who:e.target.value})}/></FL>
+          <FL label="סיווג"><input type="text" list="cls-suggest" value={form.cls||''} placeholder="כתבי סיווג משלך" onChange={e=>setForm({...form,cls:e.target.value})}/><datalist id="cls-suggest">{clsSuggest.map(c=><option key={c} value={c}/>)}</datalist></FL>
+        </div>
         {flds.map(([k,l,,h])=><FL key={k} label={l} req help={h}><textarea required value={form[k]} rows={3} onChange={e=>setForm({...form,[k]:e.target.value})} style={{resize:'vertical'}}/></FL>)}
         <div style={{display:'flex',gap:'9px',paddingTop:'4px'}}>
           <button type="submit" className="btn-p" style={{flex:1,padding:'11px',borderRadius:'10px',fontWeight:700,border:'none',cursor:'pointer'}}>שמור</button>
@@ -1785,18 +1824,99 @@ function PracticalHours({user,updateUser,req}){
         </div>
       </form>
     </div>)}
-    <h3 style={{fontSize:'.88rem',fontWeight:700,color:'var(--txt)',margin:'0 0 9px'}}>הדיווחים שלי בשנה הנוכחית ({curRecs(user.practical,user.year).length})</h3>
-    {!curRecs(user.practical,user.year).length?(<div className="card" style={{padding:'36px',textAlign:'center'}}><p style={{color:'var(--sub)',marginBottom:'12px'}}>טרם דווחו שעות בשנה זו</p><button onClick={()=>setShow(true)} className="btn-p" style={{padding:'9px 20px',borderRadius:'10px',fontWeight:700,border:'none',cursor:'pointer'}}>דיווח ראשון</button></div>)
-    :curRecs(user.practical,user.year).map((r)=>{const i=(user.practical||[]).indexOf(r);return(
-      <RC key={r.id} badge={`מפגש #${r.num}`} bc="#1E244B" meta={r.date?new Date(r.date).toLocaleDateString('he-IL'):''} onEdit={()=>{setForm(r);setEditIdx(i);setShow(true);window.scrollTo({top:0,behavior:'smooth'});}} onDelete={()=>{if(confirm('למחוק?')){const a=[...user.practical];a.splice(i,1);updateUser({practical:a});}}} expanded={expIdx===i} onToggle={()=>setExpIdx(expIdx===i?null:i)} preview={r.open}>
+    {curP.length>0&&(<div style={{display:'flex',flexDirection:'column',gap:'9px',marginBottom:'12px'}}>
+      <div style={{display:'flex',gap:'7px',flexWrap:'wrap'}}>
+        <button onClick={()=>setMode('list')} style={pill(mode==='list')}>כל המפגשים</button>
+        <button onClick={()=>setMode('people')} style={pill(mode==='people')}>לפי אנשים</button>
+      </div>
+      {clsList.length>0&&(<div style={{display:'flex',gap:'6px',flexWrap:'wrap',alignItems:'center'}}>
+        <span style={{fontSize:'.78rem',color:'var(--sub)',fontWeight:600}}>סיווג:</span>
+        <button onClick={()=>setClsFilter('')} style={pill(!clsFilter)}>הכל</button>
+        {clsList.map(c=><button key={c} onClick={()=>setClsFilter(clsFilter===c?'':c)} style={pill(clsFilter===c)}>{c}</button>)}
+      </div>)}
+      {personFilter&&mode==='list'&&(<div style={{fontSize:'.8rem',color:'var(--txt)'}}>מוצגים המפגשים עם: <b>{personName}</b>{' '}<button onClick={()=>setPersonFilter('')} style={{background:'none',border:'none',color:'var(--a1)',cursor:'pointer',fontWeight:600,fontSize:'.8rem'}}>הצג הכל ✕</button></div>)}
+    </div>)}
+    {!curP.length?(<div className="card" style={{padding:'36px',textAlign:'center'}}><p style={{color:'var(--sub)',marginBottom:'12px'}}>טרם דווחו שעות בשנה זו</p><button onClick={()=>setShow(true)} className="btn-p" style={{padding:'9px 20px',borderRadius:'10px',fontWeight:700,border:'none',cursor:'pointer'}}>דיווח ראשון</button></div>)
+    :mode==='people'?(<div>
+        <h3 style={{fontSize:'.88rem',fontWeight:700,color:'var(--txt)',margin:'0 0 9px'}}>לפי אנשים ({groups.filter(g=>g.key!=='__none__').length})</h3>
+        {groups.length===0&&<div className="card" style={{padding:'24px',textAlign:'center'}}><p style={{color:'var(--sub)',margin:0}}>אין מפגשים בסיווג הזה</p></div>}
+        <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(270px,1fr))',gap:'10px'}}>
+          {groups.map(g=>(<div key={g.key} className="card" style={{padding:'16px'}}>
+            <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',gap:'8px',marginBottom:'8px'}}>
+              <span style={{fontWeight:800,fontSize:'1rem',color:'var(--txt)'}}>{g.name}</span>
+              <span style={{padding:'2px 10px',borderRadius:'20px',fontSize:'.75rem',fontWeight:700,background:'#1E244B18',color:'#1E244B',whiteSpace:'nowrap'}}>{g.rows.length} {g.rows.length===1?'מפגש':'מפגשים'}</span>
+            </div>
+            <p style={{margin:'0 0 6px',fontSize:'.8rem',color:'var(--sub)'}}>מפגש אחרון: {fmt(g.last.date)||'—'}{g.last.num?` (#${g.last.num})`:''}</p>
+            <div style={{display:'flex',gap:'4px',flexWrap:'wrap',alignItems:'center',marginBottom:'10px'}}>
+              <span style={{fontSize:'.74rem',color:'var(--sub)',fontWeight:600}}>רצף:</span>
+              {g.rows.map((r,k)=>(<span key={r.id||k} title={fmt(r.date)} style={{padding:'1px 8px',borderRadius:'12px',fontSize:'.74rem',fontWeight:700,background:'rgba(0,0,0,.05)',color:'var(--txt)'}}>#{r.num||'?'}</span>))}
+            </div>
+            <button onClick={()=>{setPersonFilter(g.key);setMode('list');}} style={{background:'none',border:'none',color:'var(--a1)',cursor:'pointer',fontWeight:600,fontSize:'.78rem',padding:0}}>הצג את המפגשים ←</button>
+          </div>))}
+        </div>
+      </div>)
+    :(<div>
+      <h3 style={{fontSize:'.88rem',fontWeight:700,color:'var(--txt)',margin:'0 0 9px'}}>הדיווחים שלי בשנה הנוכחית ({visible.length}{visible.length!==curP.length?` מתוך ${curP.length}`:''})</h3>
+      {visible.length===0&&<div className="card" style={{padding:'24px',textAlign:'center'}}><p style={{color:'var(--sub)',margin:0}}>אין מפגשים שמתאימים לסינון</p></div>}
+      {visible.map((r)=>{const i=allP.indexOf(r);return(
+        <RC key={r.id} badge={`מפגש #${r.num}`} bc="#1E244B" meta={[fmt(r.date),r.who,r.cls].filter(Boolean).join(' | ')} onEdit={()=>{setForm({...ef,...r});setEditIdx(i);setShow(true);window.scrollTo({top:0,behavior:'smooth'});}} onDelete={()=>{if(confirm('למחוק?')){const a=[...user.practical];a.splice(i,1);updateUser({practical:a});}}} expanded={expIdx===i} onToggle={()=>setExpIdx(expIdx===i?null:i)} preview={r.open}>
         <div style={{display:'flex',flexDirection:'column',gap:'9px',marginBottom:'7px'}}>
           {flds.map(([k,t])=><RS key={k} title={t} content={r[k]}/>)}
           {getAtts(r).map((att,ai)=><div key={ai} style={{padding:'7px 11px',borderRadius:'8px',background:'rgba(16,185,129,.08)',border:'1px solid rgba(16,185,129,.2)'}}><span style={{fontSize:'.81rem',fontWeight:600,color:'#059669'}}>קובץ {ai+1}: </span><a href="#" onClick={e=>{e.preventDefault();openFileUrl(att.url,att.name);}} style={{color:'#059669',fontSize:'.81rem',cursor:'pointer'}}>{att.name}</a></div>)}
           {getAtts(r).length<3&&<UB onUpload={e=>attach(e,i)} uploading={ul} label={`צרף קובץ (${getAtts(r).length}/3)`} progress={prog}/>}
         </div>
       </RC>
-    );})}
+      );})}
+    </div>)}
     <ArchiveList recs={pastRecs(user.practical,user.year)} label={r=>`מפגש #${r.num||''}`} preview={r=>r.open}/>
+  </div>);
+}
+
+// ══════════ הצגה של חברה ══════════
+function PeerPresentations({user,updateUser}){
+  const ef={date:'',presenter:'',took:'',relevance:'',open:''};
+  const [show,setShow]=useState(false),[editIdx,setEditIdx]=useState(null),[expIdx,setExpIdx]=useState(null),[form,setForm]=useState(ef);
+  const all=user.peer||[];const items=curRecs(all,user.year);
+  const reset=()=>{setForm(ef);setShow(false);setEditIdx(null);};
+  const save=e=>{
+    e.preventDefault();
+    const clean={date:form.date||'',presenter:(form.presenter||'').trim(),took:form.took||'',relevance:form.relevance||'',open:form.open||''};
+    const a=[...all];
+    if(editIdx!==null)a[editIdx]={...clean,id:a[editIdx].id,yr:a[editIdx].yr!==undefined?a[editIdx].yr:user.year};else a.push({...clean,id:Date.now().toString(),yr:user.year});
+    updateUser({peer:a});reset();alert('הדיווח נשמר');
+  };
+  const flds=[['took','מה לקחתי',true],['relevance','איפה זה פוגש אותי בעבודה שלי',true],['open','מה נשאר לי פתוח (רשות)',false]];
+  return(<div>
+    <div className="card" style={{padding:'20px',marginBottom:'16px'}}>
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',flexWrap:'wrap',gap:'8px'}}>
+        <div>
+          <h2 style={{margin:'0 0 2px',fontSize:'1.25rem',fontWeight:800,color:'var(--txt)'}}>הצגה של חברה</h2>
+          <p style={{margin:0,fontSize:'.8rem',color:'var(--sub)'}}>מה לקחתי מההדרכה הקבוצתית — {items.length} {items.length===1?'דיווח':'דיווחים'} בשנה הנוכחית</p>
+        </div>
+        <button onClick={()=>{if(show)reset();else setShow(true);}} className="btn-p" style={{padding:'9px 18px',borderRadius:'10px',fontWeight:700,fontSize:'.87rem',border:'none',cursor:'pointer'}}>{show?'סגור':'+ דיווח חדש'}</button>
+      </div>
+    </div>
+    {show&&(<div className="card" style={{padding:'22px',marginBottom:'14px'}}>
+      <h3 style={{margin:'0 0 14px',fontSize:'.97rem',fontWeight:700,color:'var(--txt)'}}>{editIdx!==null?'עריכת דיווח':'דיווח חדש'}</h3>
+      <form onSubmit={save} style={{display:'flex',flexDirection:'column',gap:'12px'}}>
+        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'12px'}}>
+          <FL label="תאריך" req><input type="date" required value={form.date||''} onChange={e=>setForm({...form,date:e.target.value})}/></FL>
+          <FL label="שם המציגה" req><input type="text" required value={form.presenter||''} onChange={e=>setForm({...form,presenter:e.target.value})}/></FL>
+        </div>
+        {flds.map(([k,l,r])=><FL key={k} label={l} req={r}><textarea required={r} value={form[k]||''} rows={3} onChange={e=>setForm({...form,[k]:e.target.value})} style={{resize:'vertical'}}/></FL>)}
+        <div style={{display:'flex',gap:'9px',paddingTop:'4px'}}>
+          <button type="submit" className="btn-p" style={{flex:1,padding:'11px',borderRadius:'10px',fontWeight:700,border:'none',cursor:'pointer'}}>שמור</button>
+          <button type="button" onClick={reset} style={{padding:'11px 18px',borderRadius:'10px',background:'rgba(0,0,0,.06)',color:'var(--txt)',fontWeight:600,border:'none',cursor:'pointer'}}>ביטול</button>
+        </div>
+      </form>
+    </div>)}
+    {!items.length?(<div className="card" style={{padding:'36px',textAlign:'center'}}><p style={{color:'var(--sub)',marginBottom:'12px'}}>טרם נרשמו דיווחים</p><button onClick={()=>setShow(true)} className="btn-p" style={{padding:'9px 20px',borderRadius:'10px',fontWeight:700,border:'none',cursor:'pointer'}}>דיווח ראשון</button></div>)
+    :items.map((r,idx)=>{const i=all.indexOf(r);return(
+      <RC key={r.id||i} badge={`הצגה #${idx+1}`} bc="#0d9488" meta={[r.date?new Date(r.date).toLocaleDateString('he-IL'):'',r.presenter].filter(Boolean).join(' | ')} onEdit={()=>{setForm({...ef,...r});setEditIdx(i);setShow(true);window.scrollTo({top:0,behavior:'smooth'});}} onDelete={()=>{if(confirm('למחוק?')){const a=[...all];a.splice(i,1);updateUser({peer:a});}}} expanded={expIdx===i} onToggle={()=>setExpIdx(expIdx===i?null:i)} preview={r.took}>
+        <div style={{display:'flex',flexDirection:'column',gap:'9px',marginBottom:'7px'}}>{flds.map(([k,t])=><RS key={k} title={t} content={r[k]}/>)}</div>
+      </RC>
+    );})}
+    <ArchiveList recs={pastRecs(all,user.year)} label={r=>'הצגה של חברה'+(r.presenter?' — '+r.presenter:'')} preview={r=>r.took}/>
   </div>);
 }
 
