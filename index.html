@@ -151,6 +151,8 @@ const FB = {
 };
 firebase.initializeApp(FB);
 const db=firebase.firestore(), auth=firebase.auth(), storage=firebase.storage();
+// חיבור יציב ברשתות מסוננות: מאפשר ל-Firestore לעבור אוטומטית ל-long polling אם החיבור הרגיל נחסם
+try{db.settings({experimentalAutoDetectLongPolling:true,merge:true});}catch(e){console.warn('firestore settings',e);}
 
 const OFFICE_WA='97225662323', OFFICE_TEL='02-5662323';
 const YL={'2':"שנה ב'",'3':"שנה ג'",'4':"שנה ד' — פלא יועץ"};
