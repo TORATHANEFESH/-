@@ -2040,11 +2040,6 @@ function CasePresentation({user,updateUser,req,siteC}){
           {form.summary&&<p style={{margin:'2px 0 5px',fontSize:'.8rem',color:'#059669',fontWeight:600}}>✓ {form.summary.name}</p>}
           <UB onUpload={e=>attach(e,'summary')} uploading={ulS} progress={progS} label={form.summary?'החלף קובץ סיכום':'צרף קובץ סיכום'} accept={OK_ACCEPT}/>
         </div>
-        <div>
-          <label className="fl-label">קובץ שיבוץ להצגת מקרה ביומן</label>
-          {form.assignment&&<p style={{margin:'2px 0 5px',fontSize:'.8rem',color:'#059669',fontWeight:600}}>✓ {form.assignment.name}</p>}
-          <UB onUpload={e=>attach(e,'assignment')} uploading={ulA} progress={progA} label={form.assignment?'החלף קובץ שיבוץ':'צרף קובץ שיבוץ'} accept={OK_ACCEPT}/>
-        </div>
         <div style={{display:'flex',gap:'9px',paddingTop:'4px'}}>
           <button onClick={save} className="btn-p" style={{flex:1,padding:'11px',borderRadius:'10px',fontWeight:700,border:'none',cursor:'pointer'}}>שמור</button>
           <button onClick={reset} style={{padding:'11px 18px',borderRadius:'10px',background:'rgba(0,0,0,.06)',color:'var(--txt)',fontWeight:600,border:'none',cursor:'pointer'}}>ביטול</button>
