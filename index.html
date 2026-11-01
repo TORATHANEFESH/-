@@ -1331,30 +1331,26 @@ function LoginPage({users,setUsers,setCur,onLogo}){
   return(
     <div style={{minHeight:'100vh',display:'flex',flexDirection:'column',position:'relative',overflow:'hidden'}}>
       {/* Hero section like official site */}
-      <div style={{background:'linear-gradient(180deg,#E88F6A 0%,#A87071 25%,#765C74 45%,#524686 65%,#1E244B 100%)',
+      <div style={{background:'#FBF3EA',
         minHeight:'100vh',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',
         padding:'24px',position:'relative'}}>
         {/* Animated dots background */}
         <div style={{position:'absolute',inset:0,
-          backgroundImage:'url("data:image/svg+xml,%3Csvg width=\'80\' height=\'80\' viewBox=\'0 0 80 80\' xmlns=\'http://www.w3.org/2000/svg\'%3E%3Ccircle cx=\'40\' cy=\'40\' r=\'2\' fill=\'%23ffffff\' fill-opacity=\'0.35\'/%3E%3C/svg%3E")',
+          backgroundImage:'url("data:image/svg+xml,%3Csvg width=\'80\' height=\'80\' viewBox=\'0 0 80 80\' xmlns=\'http://www.w3.org/2000/svg\'%3E%3Ccircle cx=\'40\' cy=\'40\' r=\'2\' fill=\'%23c9a27a\' fill-opacity=\'0.22\'/%3E%3C/svg%3E")',
           backgroundSize:'80px 80px',
           animation:'dotsFloat 8s ease-in-out infinite alternate',
           pointerEvents:'none',zIndex:0}}/>
 
-        {/* Logo top-right */}
-        <div style={{position:'absolute',top:'16px',right:'20px',zIndex:3,padding:'0 0 30px 0',background:'radial-gradient(ellipse 80% 70% at 70% 30%, rgba(255,255,255,0.18) 0%, transparent 70%)'}}>
-          <img src={`data:image/png;base64,${LOGO}`} alt="לוגו" className="logo-img" style={{width:'152px',height:'auto',cursor:'pointer'}} onClick={onLogo} onDoubleClick={onLogo}/>
-        </div>
-
-        <div style={{textAlign:'center',marginBottom:'28px',position:'relative',zIndex:1,marginTop:'120px'}}>
-          <h1 style={{fontSize:'2.42rem',fontWeight:800,color:'#fff',margin:'0 0 6px',fontFamily:"'Assistant',sans-serif",textShadow:'0 2px 8px rgba(0,0,0,0.25)'}}>תורת הנפש</h1>
-          <p style={{color:'rgba(255,255,255,0.85)',fontSize:'1.1rem',margin:'0 0 4px',fontWeight:600}}>מכללה להתפתחות אישית והכשרת יועצים</p>
-          <p style={{color:'rgba(255,255,255,0.55)',fontSize:'0.94rem',margin:0}}>יומן הכשרה – תורת הנפש</p>
+        <div style={{textAlign:'center',marginBottom:'26px',position:'relative',zIndex:1}}>
+          <img src={`data:image/png;base64,${LOGO}`} alt="לוגו" className="logo-img" style={{width:'190px',height:'auto',cursor:'pointer'}} onClick={onLogo} onDoubleClick={onLogo}/>
+          <div style={{width:'52px',height:'3px',background:'#E0A526',margin:'12px auto 14px',borderRadius:'2px'}}/>
+          <h1 style={{fontSize:'2.2rem',fontWeight:800,color:'#7C2D12',margin:'0 0 6px',fontFamily:"'Assistant',sans-serif"}}>יומן הכשרה</h1>
+          <p style={{color:'#92614A',fontSize:'1rem',margin:0,fontWeight:600}}>מכללה להתפתחות אישית והכשרת יועצים</p>
         </div>
 
       <div style={{background:'rgba(255,255,255,0.97)',borderRadius:'20px',padding:'44px 40px',
-        maxWidth:'420px',width:'100%',boxShadow:'0 20px 48px rgba(0,0,0,0.35)',
-        position:'relative',zIndex:2}}>
+        maxWidth:'420px',width:'100%',
+        position:'relative',zIndex:2,border:'1px solid #F1E2D0',boxShadow:'0 12px 32px rgba(124,45,18,0.12)'}}>
         {needsProfile?(<>
         <div style={{textAlign:'center',marginBottom:'24px'}}>
           <h2 style={{fontSize:'1.32rem',fontWeight:700,color:'#1E244B',margin:'0 0 4px'}}>ברוכים הבאים!</h2>
@@ -1380,7 +1376,7 @@ function LoginPage({users,setUsers,setCur,onLogo}){
             </div>
           </div>
           <button type="submit" className="btn-p" disabled={loading}
-            style={{width:'100%',padding:'14px',borderRadius:'13px',fontSize:'1rem',fontWeight:700,opacity:loading?0.7:1}}>
+            style={{width:'100%',padding:'14px',borderRadius:'13px',fontSize:'1rem',fontWeight:700,opacity:loading?0.7:1,background:'#C2410C'}}>
             {loading?'רגע...':'המשך'}
           </button>
         </form>
@@ -1419,7 +1415,7 @@ function LoginPage({users,setUsers,setCur,onLogo}){
             <input type="password" required value={form.pw} onChange={e=>setForm({...form,pw:e.target.value})} placeholder="לפחות 6 תווים"/>
           </div>
           <button type="submit" className="btn-p" disabled={loading}
-            style={{width:'100%',padding:'14px',borderRadius:'13px',fontSize:'1rem',fontWeight:700,opacity:loading?0.7:1}}>
+            style={{width:'100%',padding:'14px',borderRadius:'13px',fontSize:'1rem',fontWeight:700,opacity:loading?0.7:1,background:'#C2410C'}}>
             {loading?'רגע...':reg?'הרשמה':'כניסה למערכת'}
           </button>
           {!reg&&(
