@@ -558,12 +558,32 @@ function App(){
     db.collection('users').doc(cur.id).update(clean).catch(e=>{console.error(e);alert(e&&e.code==='not-found'?'הפרופיל שלך לא נמצא במערכת. יש לפנות למשרד.':'השמירה נכשלה. בדקי חיבור לאינטרנט ונסי שוב.');});
   };
 
+  // כניסת צוות (מנהלת/מרצים) עם חשבון גוגל - ההרשאה נקבעת לפי האוסף staff במסד הנתונים
+  const staffGoogleLogin=async()=>{
+    if(/FBAN|FBAV|Instagram|WhatsApp|; wv\)|GSA\/|Line\//i.test(navigator.userAgent)){alert('כניסה עם גוגל לא עובדת מתוך וואטסאפ או מייל. יש לפתוח את האתר בדפדפן (Chrome או Safari).');return;}
+    try{
+      const cred=await auth.signInWithPopup(new firebase.auth.GoogleAuthProvider());
+      const email=((cred.user&&cred.user.email)||'').toLowerCase();
+      const d=await db.collection('staff').doc(email).get();
+      if(!d.exists){alert('לחשבון הזה אין הרשאת צוות.');try{await auth.signOut();}catch(e){}return;}
+      const st=d.data()||{};
+      if(st.role==='admin'){setIsAdmin(true);setView('admin');return;}
+      const gs=(st.genders&&st.genders.length)?st.genders:['female'];
+      setTeacherGender(gs.length===1?gs[0]:null);
+      setIsTeacher(true);setView('teacher');
+    }catch(err){
+      if(err&&(err.code==='auth/popup-closed-by-user'||err.code==='auth/cancelled-popup-request'))return;
+      console.error(err);
+      alert('הכניסה נכשלה. נסי שוב.');
+    }
+  };
   const handleLogo=()=>{
     const now=Date.now();
     const recent=logoClicksRef.current.filter(t=>now-t<1200);
     if(recent.length>=2){
       // Triple click — admin/teacher
       logoClicksRef.current=[];
+      if(confirm('כניסת צוות עם חשבון גוגל?\nאישור = כניסה עם גוגל\nביטול = כניסה עם סיסמה (זמני)')){staffGoogleLogin();return;}
       if(!pwReady){alert('ההגדרות עדיין נטענות. נסי שוב בעוד רגע.');return;}
       const choice=prompt('בחר תפקיד:\n1 — מנהל\n2 — מרצה\n\nהזן מספר:');
       if(choice==='1'){
