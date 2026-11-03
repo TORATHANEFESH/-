@@ -2,7 +2,7 @@
 <html lang="he" dir="rtl">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>יומן הכשרה – תורת הנפש</title>
 <meta name="theme-color" content="#1E244B">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -133,6 +133,17 @@ input:focus,textarea:focus,select:focus{outline:none;border-color:var(--a1);box-
 @media(max-width:480px){
   .stat-grid{grid-template-columns:1fr!important;}
 }
+
+/* התאמות לנייד */
+@supports(height:100dvh){body{min-height:100dvh;}.app-bg{min-height:100dvh;}}
+[style*="position: fixed"][style*="inset: 0"]{overflow-y:auto!important;-webkit-overflow-scrolling:touch;}
+@media(max-width:640px){
+  input,textarea,select{font-size:16px!important;}
+  .nav-tab{min-height:44px;}
+}
+@media(max-width:480px){
+  [style*="grid-template-columns: 1fr 1fr"]{grid-template-columns:repeat(auto-fit,minmax(170px,1fr))!important;}
+}
 </style>
 </head>
 <body class="theme-default">
@@ -242,13 +253,13 @@ function applyAutoAdvance(u){
   const cy=computedYear(u),sy=parseInt(u.year)||cy;
   if(cy<=sy)return u;
   const stamp=arr=>(arr||[]).map(r=>(r.yr===undefined||r.yr===null)?{...r,yr:String(sy)}:r);
-  const practical=stamp(u.practical),supervision=stamp(u.supervision),cases=stamp(u.cases),proficiency=stamp(u.proficiency);
+  const practical=stamp(u.practical),supervision=stamp(u.supervision),cases=stamp(u.cases),proficiency=stamp(u.proficiency),peer=stamp(u.peer);
   const cnt=(arr,y)=>(arr||[]).filter(r=>String(r.yr)===String(y)).length;
   const hist=[...(u.yearHistory||[])];
   for(let y=sy;y<cy;y++){
-    if(!hist.find(h=>String(h.year)===String(y)))hist.push({year:String(y),at:new Date().toISOString(),practical:cnt(practical,y),supervision:cnt(supervision,y),cases:cnt(cases,y),proficiency:cnt(proficiency,y)});
+    if(!hist.find(h=>String(h.year)===String(y)))hist.push({year:String(y),at:new Date().toISOString(),practical:cnt(practical,y),supervision:cnt(supervision,y),cases:cnt(cases,y),proficiency:cnt(proficiency,y),peer:cnt(peer,y)});
   }
-  return {...u,year:String(cy),practical,supervision,cases,proficiency,yearHistory:hist};
+  return {...u,year:String(cy),practical,supervision,cases,proficiency,peer,yearHistory:hist};
 }
 // רשימת ארכיון לקריאה בלבד של דיווחים משנים קודמות
 function ArchiveList({recs,label,preview}){
@@ -284,8 +295,17 @@ function getWithRetry(ref,tries){
     return new Promise(res=>setTimeout(res,700)).then(()=>getWithRetry(ref,tries-1));
   });
 }
+function heErr(e){
+  const c=(e&&e.code)||'',m=(e&&e.message)||'';
+  if(/[\u0590-\u05FF]/.test(m))return m;
+  if(/permission/.test(c))return 'אין הרשאה לפעולה. נסי להתחבר מחדש.';
+  if(/unavailable|network|deadline/.test(c)||/offline|network|timeout/i.test(m))return 'בעיית חיבור לאינטרנט. בדקי את החיבור ונסי שוב.';
+  if(/exhausted/.test(c))return 'חרגנו ממכסת השימוש. יש לפנות למשרד.';
+  return 'אירעה שגיאה. נסי שוב, ואם זה חוזר יש לפנות למשרד.';
+}
+const MIME_BY_EXT={pdf:'application/pdf',doc:'application/msword',docx:'application/vnd.openxmlformats-officedocument.wordprocessingml.document',jpg:'image/jpeg',jpeg:'image/jpeg',png:'image/png',gif:'image/gif',webp:'image/webp',heic:'image/heic',heif:'image/heif',bmp:'image/bmp',tif:'image/tiff',tiff:'image/tiff',pages:'application/vnd.apple.pages'};
 function dataURLtoBlob(dataURL){
-  const parts=dataURL.split(',');const mime=parts[0].match(/:(.*?);/)[1];
+  const parts=dataURL.split(',');const mm=parts[0].match(/:(.*?);/);const mime=(mm&&mm[1])||'application/octet-stream';
   const b64=atob(parts[1]);const arr=new Uint8Array(b64.length);
   for(let i=0;i<b64.length;i++)arr[i]=b64.charCodeAt(i);
   return new Blob([arr],{type:mime});
@@ -321,11 +341,10 @@ async function loadFsBlob(url,name){
   const fileId=url.substring(8);
   const doc=await db.collection('fileStore').doc(fileId).get();
   if(!doc.exists){alert('הקובץ לא נמצא');return null;}
-  const meta=doc.data();let base64='';
-  for(let i=0;i<meta.chunkCount;i++){
-    const chunk=await db.collection('fileStore').doc(fileId).collection('chunks').doc(String(i)).get();
-    if(chunk.exists)base64+=chunk.data().data;
-  }
+  const meta=doc.data();
+  const cs=await Promise.all(Array.from({length:meta.chunkCount},(_,i)=>db.collection('fileStore').doc(fileId).collection('chunks').doc(String(i)).get()));
+  if(cs.some(c=>!c.exists))throw new Error('הקובץ לא הועלה במלואו. נא להעלות אותו שוב.');
+  const base64=cs.map(c=>c.data().data).join('');
   const blob=dataURLtoBlob(base64);
   return {blobUrl:URL.createObjectURL(blob),name:meta.name||name||''};
 }
@@ -339,7 +358,7 @@ async function downloadFileUrl(url,name){
     }else{
       window.open(url,'_blank');
     }
-  }catch(e){alert('שגיאה בהורדת הקובץ: '+e.message);}
+  }catch(e){alert('שגיאה בהורדת הקובץ. '+heErr(e));}
 }
 async function openFileUrl(url,name){
   if(url&&url.startsWith('#fsfile:')){
@@ -347,7 +366,7 @@ async function openFileUrl(url,name){
       const r=await loadFsBlob(url,name);
       if(!r)return;
       showFilePreview(r.blobUrl,r.name);
-    }catch(e){alert('שגיאה בפתיחת הקובץ: '+e.message);}
+    }catch(e){alert('שגיאה בפתיחת הקובץ. '+heErr(e));}
   }else{
     const driveId=getDriveFileId(url);
     if(driveId){showDrivePreview(driveId,name||url);return;}
@@ -375,33 +394,54 @@ function showDrivePreview(fileId,name){
   document.body.appendChild(ov);
   document.addEventListener('keydown',function esc(e){if(e.key==='Escape'){ov.remove();document.removeEventListener('keydown',esc);}});
 }
-function upFileToFirestore(file,uid,cat,onProgress){
-  const MAX_CHUNK=700000;
-  return new Promise((resolve,reject)=>{
-    if(file.size>10*1024*1024){reject(new Error('הקובץ גדול מדי — מקסימום 10MB'));return;}
-    const reader=new FileReader();
-    reader.onload=async()=>{
-      try{
-        const base64=reader.result;const chunks=[];
-        for(let i=0;i<base64.length;i+=MAX_CHUNK)chunks.push(base64.substring(i,i+MAX_CHUNK));
-        if(onProgress)onProgress(10);
-        const docRef=await db.collection('fileStore').add({
-          name:file.name,uid,cat,size:file.size,type:file.type,
-          chunkCount:chunks.length,createdAt:new Date().toISOString()
-        });
-        for(let i=0;i<chunks.length;i++){
-          await db.collection('fileStore').doc(docRef.id).collection('chunks').doc(String(i)).set({data:chunks[i]});
-          if(onProgress)onProgress(10+Math.round(((i+1)/chunks.length)*85));
-        }
-        if(onProgress)onProgress(100);
-        const result={url:`#fsfile:${docRef.id}`,name:file.name,at:new Date().toISOString(),uid,cat};
-        try{await db.collection('uploads').add({studentId:uid,category:cat,fileName:file.name,url:result.url,uploadedAt:new Date().toISOString(),seen:false});}catch(e){}
-        resolve(result);
-      }catch(e){reject(new Error('שגיאה בשמירת הקובץ: '+e.message));}
-    };
-    reader.onerror=()=>reject(new Error('שגיאה בקריאת הקובץ'));
-    reader.readAsDataURL(file);
+function compressImage(file){
+  return new Promise(res=>{
+    try{
+      if(!(file.type||'').startsWith('image/')||/heic|heif|gif/i.test(file.type||'')||file.size<1500*1024){res(file);return;}
+      const url=URL.createObjectURL(file);const img=new Image();
+      img.onload=()=>{
+        try{
+          const M=2200;let w=img.width,h=img.height;const k=Math.min(1,M/Math.max(w,h));w=Math.round(w*k);h=Math.round(h*k);
+          const cv=document.createElement('canvas');cv.width=w;cv.height=h;cv.getContext('2d').drawImage(img,0,0,w,h);
+          cv.toBlob(bl=>{URL.revokeObjectURL(url);if(bl&&bl.size<file.size){res(new File([bl],(file.name||'image').replace(/\.[^.]+$/,'')+'.jpg',{type:'image/jpeg'}));}else res(file);},'image/jpeg',0.85);
+        }catch(e){URL.revokeObjectURL(url);res(file);}
+      };
+      img.onerror=()=>{URL.revokeObjectURL(url);res(file);};
+      img.src=url;
+    }catch(e){res(file);}
   });
+}
+function withTimeout(p,ms){return Promise.race([p,new Promise((_,rej)=>setTimeout(()=>rej(Object.assign(new Error('timeout'),{code:'deadline-exceeded'})),ms))]);}
+async function upFileToFirestore(file0,uid,cat,onProgress){
+  const MAX_CHUNK=700000;
+  const file=await compressImage(file0);
+  if(file.size>10*1024*1024){const e=new Error('הקובץ גדול מדי ('+(file.size/1048576).toFixed(1)+'MB). המקסימום הוא 10MB.');throw e;}
+  const ext=((file.name||'').split('.').pop()||'').toLowerCase();
+  const ftype=file.type||MIME_BY_EXT[ext]||'application/octet-stream';
+  const base64=await new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result);r.onerror=()=>rej(new Error('שגיאה בקריאת הקובץ'));r.readAsDataURL(file);});
+  const chunks=[];for(let i=0;i<base64.length;i+=MAX_CHUNK)chunks.push(base64.substring(i,i+MAX_CHUNK));
+  if(onProgress)onProgress(10);
+  let docRef=null;
+  try{
+    docRef=await withTimeout(db.collection('fileStore').add({name:file.name,uid,cat,size:file.size,type:ftype,chunkCount:chunks.length,createdAt:new Date().toISOString()}),25000);
+    for(let i=0;i<chunks.length;i++){
+      let ok=false,lastErr=null;
+      for(let t=0;t<3&&!ok;t++){
+        try{await withTimeout(db.collection('fileStore').doc(docRef.id).collection('chunks').doc(String(i)).set({data:chunks[i]}),30000);ok=true;}
+        catch(e){lastErr=e;await new Promise(r=>setTimeout(r,800*(t+1)));}
+      }
+      if(!ok)throw lastErr;
+      if(onProgress)onProgress(10+Math.round(((i+1)/chunks.length)*85));
+    }
+  }catch(e){
+    console.error(e);
+    if(docRef){try{for(let i=0;i<chunks.length;i++)await db.collection('fileStore').doc(docRef.id).collection('chunks').doc(String(i)).delete();await db.collection('fileStore').doc(docRef.id).delete();}catch(x){}}
+    throw new Error(heErr(e));
+  }
+  if(onProgress)onProgress(100);
+  const result={url:`#fsfile:${docRef.id}`,name:file.name,at:new Date().toISOString(),uid,cat};
+  try{await db.collection('uploads').add({studentId:uid,category:cat,fileName:file.name,url:result.url,uploadedAt:new Date().toISOString(),seen:false});}catch(e){console.error(e);}
+  return result;
 }
 function upFile(file,uid,cat,onProgress){
   return upFileToFirestore(file,uid,cat,onProgress);
@@ -446,9 +486,11 @@ function App(){
   const [siteC,setSiteC]=useState({});
   const [reqOv,setReqOv]=useState({});
   const [theme,setTheme]=useState('default');
+  const [pwReady,setPwReady]=useState(false);
 
   useEffect(()=>{
     getWithRetry(db.collection('settings').doc('general')).then(d=>{
+      setPwReady(true);
       if(d.exists){
         const v=d.data();
         if(v.adminPassword) setAdminPw(v.adminPassword);
@@ -488,19 +530,17 @@ function App(){
     const adv=applyAutoAdvance(cur);
     if(adv!==cur){
       setCur(adv);
-      db.collection('users').doc(cur.id).update({year:adv.year,practical:adv.practical,supervision:adv.supervision,cases:adv.cases,proficiency:adv.proficiency,yearHistory:adv.yearHistory}).catch(console.error);
+      db.collection('users').doc(cur.id).update({year:adv.year,practical:adv.practical,supervision:adv.supervision,cases:adv.cases,proficiency:adv.proficiency,peer:adv.peer||[],yearHistory:adv.yearHistory}).catch(console.error);
     }
   },[cur&&cur.id]);
-  // כתיבה גורפת של כל המשתמשים - רק למנהלת/מרצה (לתלמידה זה היה דורס נתונים חדשים ממכשיר אחר)
-  useEffect(()=>{
-    if((isAdmin||isTeacher)&&users.length>0) users.forEach(u=>db.collection('users').doc(u.id).set(u).catch(console.error));
-  },[users]);
+  // (הוסרה הכתיבה הגורפת של כל המשתמשים - כל פעולה כותבת ישירות למסמך של התלמידה הרלוונטית בלבד)
   // רענון הנתונים של התלמידה המחוברת מהשרת (כניסה מחודשת למכשיר אחר / חזרה לאפליקציה)
   const curIdRef=useRef(null);
   curIdRef.current=cur&&cur.id;
   const refreshCur=()=>{
     const id=curIdRef.current;if(!id)return;
     db.collection('users').doc(id).get().then(d=>{
+      if(!d.exists&&curIdRef.current===id){alert('הפרופיל שלך לא נמצא במערכת. יש לפנות למשרד.');setCur(null);setView('login');try{localStorage.removeItem('cur_user');}catch(e){}return;}
       if(d.exists&&curIdRef.current===id){const f=applyAutoAdvance({id:d.id,...d.data()});setCur(c=>c&&c.id===id?{...c,...f}:c);setUsers(us=>us.map(u=>u.id===id?{...u,...f}:u));}
     }).catch(console.error);
   };
@@ -515,7 +555,7 @@ function App(){
     setUsers(us=>us.map(u=>u.id===cur.id?{...u,...upd}:u));
     setCur(c=>({...c,...upd}));
     let clean=upd;try{clean=JSON.parse(JSON.stringify(upd));}catch(e){}
-    db.collection('users').doc(cur.id).set(clean,{merge:true}).catch(e=>{console.error(e);alert('השמירה נכשלה. בדקי חיבור לאינטרנט ונסי שוב.');});
+    db.collection('users').doc(cur.id).update(clean).catch(e=>{console.error(e);alert(e&&e.code==='not-found'?'הפרופיל שלך לא נמצא במערכת. יש לפנות למשרד.':'השמירה נכשלה. בדקי חיבור לאינטרנט ונסי שוב.');});
   };
 
   const handleLogo=()=>{
@@ -524,13 +564,14 @@ function App(){
     if(recent.length>=2){
       // Triple click — admin/teacher
       logoClicksRef.current=[];
-      const choice=prompt('בחר תפקיד:\n1 — מנהל\n2 — מחנך\n\nהזן מספר:');
+      if(!pwReady){alert('ההגדרות עדיין נטענות. נסי שוב בעוד רגע.');return;}
+      const choice=prompt('בחר תפקיד:\n1 — מנהל\n2 — מרצה\n\nהזן מספר:');
       if(choice==='1'){
         const pw=prompt('סיסמת מנהל:');
         if(pw===adminPw){setIsAdmin(true);setView('admin');}
         else if(pw) alert('סיסמה שגויה');
       } else if(choice==='2'){
-        const pw=prompt('סיסמת מחנך:');
+        const pw=prompt('סיסמת מרצה:');
         if(pw===teacherPw){
           const g=prompt('בחר מגדר:\n1 — גברים\n2 — נשים');
           if(g==='1'||g==='2'){
@@ -566,7 +607,7 @@ function App(){
   if(!cur)
     return <LoginPage users={users} setUsers={setUsers} setCur={setCur} onLogo={handleLogo}/>;
 
-  return <MainApp user={cur} updateUser={updateUser} view={view} setView={setView}
+  return <MainApp key={cur.id} user={cur} updateUser={updateUser} view={view} setView={setView}
     onLogout={()=>{setCur(null);setView('login');setIsAdmin(false);setIsTeacher(false);setTeacherGender(null);try{localStorage.removeItem('cur_user');}catch(e){}}}
     onLogo={handleLogo} reqOv={reqOv} siteC={siteC}
     updates={updates} setUpdates={setUpdates}/>;
@@ -580,13 +621,21 @@ function AdminStudentDetail({uid,users,setUsers,onClose}){
   const isFem=u.gender==='female';
   const yr=parseInt(u.year);
   const upd=changes=>{const nxt=users.map(x=>x.id===uid?{...x,...changes}:x);setUsers(nxt);db.collection('users').doc(uid).update(changes).catch(console.error);};
-  const delItem=(field,i)=>{if(!confirm('למחוק?'))return;const a=[...(u[field]||[])];a.splice(i,1);upd({[field]:a});};
-  const practFlds=[['open','כיצד התחילה הפגישה'],['topics','נושאים שעלו'],['position','עמדת הנועץ/ת'],['focus','נקודות מיקוד'],['insights','תובנות'],['challenge','קושי מרכזי'],['lessons','לקחים']];
-  const supFlds=[['topics','נושאים שנדונו'],['feedback','משוב מהמדריך/ה'],['contribution','תרומה'],['challenges','אתגרים'],['selfLearn','מה למדתי על עצמי'],['goals','יעדים לפגישה הבאה'],['lessons','לקחים']];
+  const delItem=async(field,i)=>{
+    if(!confirm('למחוק את הרשומה?'))return;
+    const target=(u[field]||[])[i];
+    let base=u[field]||[];
+    try{const d=await db.collection('users').doc(uid).get();if(d.exists)base=d.data()[field]||[];}catch(e){console.error(e);}
+    const a=(target&&target.id!==undefined&&target.id!==null)?base.filter(x=>x.id!==target.id):base.filter((x,k)=>k!==i);
+    upd({[field]:a});
+  };
+  const practFlds=[['open','כיצד התחילה הפגישה'],['topics','נושאים שעלו'],['position','עמדת הנועץ/ת'],['focus','נקודות מיקוד'],['insights','תובנות'],['challenge','קושי מרכזי'],['lessons','לקחים'],['nextQuestions','שאלות להמשך']];
+  const supFlds=[['topics','נושאים שנדונו'],['feedback','משוב מהמדריך/ה'],['contribution','תרומה'],['challenges','אתגרים'],['selfLearn','מה למדתי על עצמי'],['goals','יעדים לפגישה הבאה'],['lessons','לקחים'],['clientUpdate','מה התחדש לגבי הנועץ/ת']];
   const tabs=[
     {id:'practical',l:`התנסות (${(u.practical||[]).length})`},
     {id:'supervision',l:`הדרכות (${(u.supervision||[]).length})`},
     {id:'cases',l:`הצגות מקרה (${(u.cases||[]).length})`},
+    {id:'peer',l:`הצגות של חברה בכיתה (${(u.peer||[]).length})`},
     {id:'proficiency',l:`בקיאות (${(u.proficiency||[]).length})`},
     {id:'final',l:'עבודה מסכמת'},
   ];
@@ -641,6 +690,7 @@ function AdminStudentDetail({uid,users,setUsers,onClose}){
           </div>
           );
         }))}
+        {tab==='peer'&&(!(u.peer||[]).length?<Empty/>:(u.peer||[]).map((r,i)=>(<div key={r.id||i} style={{padding:'10px 12px',borderRadius:'9px',background:'#f9fafb',border:'1px solid #f3f4f6',marginBottom:'8px'}}><div style={{display:'flex',justifyContent:'space-between',gap:'8px',marginBottom:'6px'}}><span style={{fontWeight:700,fontSize:'.84rem'}}>{r.presenter||'—'} · {r.date||''}</span><DelBtn onClick={()=>delItem('peer',i)}/></div><FB label="מה לקחתי" value={r.took}/><FB label="איפה זה פוגש אותי בעבודה שלי" value={r.relevance}/><FB label="מה נשאר לי פתוח" value={r.open}/></div>)))}
         {tab==='proficiency'&&(!(u.proficiency||[]).length?<Empty/>:(u.proficiency||[]).map((t,i)=>(
           <div key={t.id||i} style={{padding:'11px 14px',borderRadius:'9px',border:'1px solid #fde68a',background:'#fffbeb',marginBottom:'7px',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
             <div><p style={{margin:'0 0 2px',fontWeight:700,fontSize:'.87rem',color:'#374151'}}>מבחן #{i+1} — {t.topic}</p><p style={{margin:0,fontSize:'.75rem',color:'#9ca3af'}}>{t.date?new Date(t.date).toLocaleDateString('he-IL'):''}{t.grade?` | ציון: ${t.grade}`:''}</p></div>
@@ -689,7 +739,7 @@ function AdminPanel({users,setUsers,adminPw,setAdminPw,teacherPw,setTeacherPw,se
       await db.collection('settings').doc('siteContent').set({content:c},{merge:true});
       setRefFiles(c);
       alert('הקובץ הועלה. התלמידות יראו אותו לאחר רענון הדף.');
-    }catch(err){alert('שגיאה בהעלאה: '+(err.message||err.code||String(err)));}
+    }catch(err){alert('שגיאה בהעלאה. '+heErr(err));}
     setRefUl(prev=>({...prev,[key]:false}));e.target.value='';
   };
   const addUpdate=async()=>{
@@ -702,13 +752,13 @@ function AdminPanel({users,setUsers,adminPw,setAdminPw,teacherPw,setTeacherPw,se
       setUpForm({title:'',body:'',url:'',author:'הנהלה'});
       setAddingUp(false);
       alert('העדכון פורסם!');
-    }catch(e){alert('שגיאה: '+e.message);}
+    }catch(e){alert('הפעולה נכשלה. '+heErr(e));}
     setSavingUp(false);
   };
   const delUpdate=async id=>{
     if(!confirm('למחוק עדכון זה?'))return;
     try{await db.collection('updates').doc(id).delete();setUpdates(prev=>prev.filter(u=>u.id!==id));}
-    catch(e){alert('שגיאה: '+e.message);}
+    catch(e){alert('הפעולה נכשלה. '+heErr(e));}
   };
   const saveEditUpdate=async()=>{
     if(!editingUp||!editingUp.title.trim()){alert('נא להזין כותרת');return;}
@@ -718,7 +768,7 @@ function AdminPanel({users,setUsers,adminPw,setAdminPw,teacherPw,setTeacherPw,se
       await db.collection('updates').doc(id).update(data);
       setUpdates(prev=>prev.map(u=>u.id===id?{...u,...data}:u));
       setEditingUp(null);
-    }catch(e){alert('שגיאה: '+e.message);}
+    }catch(e){alert('הפעולה נכשלה. '+heErr(e));}
     setSavingUp(false);
   };
 
@@ -729,19 +779,20 @@ function AdminPanel({users,setUsers,adminPw,setAdminPw,teacherPw,setTeacherPw,se
     }).catch(console.error);
   },[]);
 
-  const upYear=(uid,yr)=>{
-    const u=users.find(x=>x.id===uid);if(!u)return;
+  const upYear=async(uid,yr)=>{
+    let u=users.find(x=>x.id===uid);if(!u)return;
+    try{const fd=await db.collection('users').doc(uid).get();if(fd.exists)u={...u,...fd.data()};}catch(e){console.error(e);}
     const oy=u.year;
     if(String(oy)===String(yr)){alert('התלמידה כבר בשנה זו');return;}
     if(!confirm(`להעביר את ${u.name} מ${YL[oy]||`שנה ${oy}`} ל${YL[yr]||`שנה ${yr}`}?\nהדיווחים הקיימים ישויכו לשנה הנוכחית ויעברו לארכיון, והמונים יתאפסו לשנה החדשה.`))return;
     // שיוך דיווחים שטרם תויגו לשנה שממנה עוברים, כדי שלא ייספרו בשנה החדשה
     const stamp=arr=>(arr||[]).map(r=>(r.yr===undefined||r.yr===null)?{...r,yr:oy}:r);
-    const practical=stamp(u.practical),supervision=stamp(u.supervision),cases=stamp(u.cases),proficiency=stamp(u.proficiency);
+    const practical=stamp(u.practical),supervision=stamp(u.supervision),cases=stamp(u.cases),proficiency=stamp(u.proficiency),peer=stamp(u.peer);
     const cnt=arr=>(arr||[]).filter(r=>String(r.yr)===String(oy)).length;
-    const snap={year:oy,at:new Date().toISOString(),practical:cnt(practical),supervision:cnt(supervision),cases:cnt(cases),proficiency:cnt(proficiency)};
+    const snap={year:oy,at:new Date().toISOString(),practical:cnt(practical),supervision:cnt(supervision),cases:cnt(cases),proficiency:cnt(proficiency),peer:cnt(peer)};
     const hist=[...(u.yearHistory||[])].filter(h=>String(h.year)!==String(oy));hist.push(snap);
     // עיגון המעבר האוטומטי: הרמה החדשה מתחילה בשנה האקדמית הנוכחית
-    const chg={year:yr,startLevel:parseInt(yr),startYYYY:acadYear(),yearHistory:hist,practical,supervision,cases,proficiency};
+    const chg={year:yr,startLevel:parseInt(yr),startYYYY:acadYear(),yearHistory:hist,practical,supervision,cases,proficiency,peer};
     const upd=users.map(x=>x.id===uid?{...x,...chg}:x);setUsers(upd);
     db.collection('users').doc(uid).update(chg).catch(console.error);
     alert(`שנה עודכנה ל-${YL[yr]||yr}`);
@@ -761,7 +812,7 @@ function AdminPanel({users,setUsers,adminPw,setAdminPw,teacherPw,setTeacherPw,se
   };
 
   const allFiles=users.flatMap(u=>[
-    ...(u.cases||[]).map(c=>({uid:u.id,uname:u.name,cat:'הצגת מקרה',...c})),
+    ...(u.cases||[]).flatMap(c=>{const o=[];[['presentation','הצגה'],['summary','סיכום'],['assignment','קובץ שיבוץ']].forEach(([k,l])=>{if(c[k]&&(c[k].url||c[k].name))o.push({uid:u.id,uname:u.name,cat:'הצגת מקרה – '+l,...c[k]});});if(c.url)o.push({uid:u.id,uname:u.name,cat:'הצגת מקרה',...c});return o;}),
     u.finalProject?{uid:u.id,uname:u.name,cat:'עבודה מסכמת',...u.finalProject}:null,
     ...(u.practical||[]).flatMap(p=>(p.atts||[p.att]).filter(Boolean).map(att=>({uid:u.id,uname:u.name,cat:'קובץ דיווח',...att})))
   ]).filter(Boolean);
@@ -775,7 +826,7 @@ function AdminPanel({users,setUsers,adminPw,setAdminPw,teacherPw,setTeacherPw,se
       if(Object.keys(genData).length>0)
         await db.collection('settings').doc('general').set(genData,{merge:true});
       setSaved(true);setDirty(false);setTimeout(()=>setSaved(false),3000);
-    }catch(e){alert('שגיאה בשמירה: '+e.message);}
+    }catch(e){alert('שגיאה בשמירה. '+heErr(e));}
     setSaving(false);
   };
 
@@ -843,7 +894,7 @@ function AdminPanel({users,setUsers,adminPw,setAdminPw,teacherPw,setTeacherPw,se
                             style={{padding:'4px 9px',borderRadius:'7px',background:'rgba(99,102,241,.1)',color:'#6366f1',fontWeight:700,border:'1px solid rgba(99,102,241,.2)',cursor:'pointer',fontSize:'.79rem'}}>פרטים</button>
                           <button onClick={()=>{const n=prompt('שם חדש:',u.name);if(n&&n.trim()){const upd=users.map(x=>x.id===u.id?{...x,name:n.trim()}:x);setUsers(upd);db.collection('users').doc(u.id).update({name:n.trim()}).catch(console.error);}}}
                             style={{padding:'4px 9px',borderRadius:'7px',background:'rgba(74,111,165,.1)',color:'#1E244B',fontWeight:700,border:'1px solid rgba(74,111,165,.2)',cursor:'pointer',fontSize:'.79rem'}}>ערוך</button>
-                          <button onClick={()=>{if(confirm(`למחוק את ${u.name}?\nהנתונים יעברו לארכיון (לא יימחקו לצמיתות). אם היא תירשם שוב בעתיד, היא תיכנס כאיש קשר חדש עם פרופיל ריק.`)){db.collection('archivedUsers').doc(u.id).set({...u,archivedAt:new Date().toISOString()}).then(()=>db.collection('users').doc(u.id).delete()).then(()=>setUsers(users.filter(x=>x.id!==u.id))).catch(e=>alert('שגיאה: '+e.message));}}}
+                          <button onClick={()=>{if(confirm(`למחוק את ${u.name}?\nהנתונים יעברו לארכיון (לא יימחקו לצמיתות). אם היא תירשם שוב בעתיד, היא תיכנס כאיש קשר חדש עם פרופיל ריק.`)){db.collection('archivedUsers').doc(u.id).set({...u,archivedAt:new Date().toISOString()}).then(()=>db.collection('users').doc(u.id).delete()).then(()=>setUsers(users.filter(x=>x.id!==u.id))).catch(e=>alert('הפעולה נכשלה. '+heErr(e)));}}}
                             style={{padding:'4px 9px',borderRadius:'7px',background:'rgba(239,68,68,.1)',color:'#ef4444',fontWeight:700,border:'1px solid rgba(239,68,68,.2)',cursor:'pointer',fontSize:'.79rem'}}>מחק</button>
                         </div>
                       </td>
@@ -889,7 +940,7 @@ function AdminPanel({users,setUsers,adminPw,setAdminPw,teacherPw,setTeacherPw,se
                   <div><label style={{display:'block',fontSize:'.8rem',fontWeight:700,marginBottom:'4px'}}>כותרת *</label><input type="text" value={upForm.title} onChange={e=>setUpForm({...upForm,title:e.target.value})} placeholder="כותרת העדכון" style={{width:'100%',padding:'9px 12px',borderRadius:'9px',border:'2px solid #e5e7eb',fontSize:'.88rem'}}/></div>
                   <div><label style={{display:'block',fontSize:'.8rem',fontWeight:700,marginBottom:'4px'}}>תוכן</label><textarea value={upForm.body} onChange={e=>setUpForm({...upForm,body:e.target.value})} rows={4} placeholder="תוכן העדכון..." style={{width:'100%',padding:'9px 12px',borderRadius:'9px',border:'2px solid #e5e7eb',fontSize:'.88rem',resize:'vertical'}}/></div>
                   <div><label style={{display:'block',fontSize:'.8rem',fontWeight:700,marginBottom:'4px'}}>קישור / סרטון (אופציונלי)</label><input type="url" value={upForm.url} onChange={e=>setUpForm({...upForm,url:e.target.value})} placeholder="https://..." dir="ltr" style={{width:'100%',padding:'9px 12px',borderRadius:'9px',border:'2px solid #e5e7eb',fontSize:'.88rem'}}/><p style={{margin:'3px 0 0',fontSize:'.72rem',color:'#6b7280'}}>קישורי YouTube ו-Google Drive יציגו תצוגה מקדימה אוטומטית</p></div>
-                  <div><label style={{display:'block',fontSize:'.8rem',fontWeight:700,marginBottom:'4px'}}>פורסם ע"י</label><input type="text" value={upForm.author} onChange={e=>setUpForm({...upForm,author:e.target.value})} style={{width:'100%',padding:'9px 12px',borderRadius:'9px',border:'2px solid #e5e7eb',fontSize:'.88rem'}}/></div>
+                  <div><label style={{display:'block',fontSize:'.8rem',fontWeight:700,marginBottom:'4px'}}>פורסם ע״י</label><input type="text" value={upForm.author} onChange={e=>setUpForm({...upForm,author:e.target.value})} style={{width:'100%',padding:'9px 12px',borderRadius:'9px',border:'2px solid #e5e7eb',fontSize:'.88rem'}}/></div>
                   {upForm.url&&getYouTubeId(upForm.url)&&(
                     <div style={{borderRadius:'10px',overflow:'hidden',maxWidth:'320px'}}>
                       <p style={{fontSize:'.78rem',fontWeight:600,color:'#059669',margin:'0 0 5px'}}>תצוגה מקדימה:</p>
@@ -928,7 +979,7 @@ function AdminPanel({users,setUsers,adminPw,setAdminPw,teacherPw,setTeacherPw,se
                       {up.body&&<p style={{margin:'0 0 3px',fontSize:'.82rem',color:'#6b7280',whiteSpace:'pre-line',maxHeight:'60px',overflow:'hidden'}}>{up.body}</p>}
                       <div style={{display:'flex',gap:'10px',fontSize:'.73rem',color:'#9ca3af'}}>
                         <span>{up.createdAt?new Date(up.createdAt).toLocaleDateString('he-IL'):''}</span>
-                        {up.author&&<span>ע"י {up.author}</span>}
+                        {up.author&&<span>ע״י {up.author}</span>}
                         {up.url&&<span style={{color:'#1E244B'}}>+ קישור</span>}
                       </div>
                     </div>
@@ -954,7 +1005,7 @@ function AdminPanel({users,setUsers,adminPw,setAdminPw,teacherPw,setTeacherPw,se
                     style={{width:'100%',padding:'10px 13px',border:'2px solid #e5e7eb',borderRadius:'9px',fontFamily:'monospace',fontWeight:600}}/>
                 </div>
                 <div>
-                  <label style={{display:'block',fontSize:'.79rem',fontWeight:700,color:'#374151',marginBottom:'4px'}}>סיסמת מחנך</label>
+                  <label style={{display:'block',fontSize:'.79rem',fontWeight:700,color:'#374151',marginBottom:'4px'}}>סיסמת מרצה</label>
                   <input type="text" value={editTeacherPw} onChange={e=>{setEditTeacherPw(e.target.value);setDirty(true);}}
                     style={{width:'100%',padding:'10px 13px',border:'2px solid #e5e7eb',borderRadius:'9px',fontFamily:'monospace',fontWeight:600}}/>
                 </div>
@@ -997,8 +1048,8 @@ function TeacherStudentDetail({u,stuUploads,setUploads}){
   useEffect(()=>setTab('overview'),[u.id]);
   const isFem=u.gender==='female';
   const yr=parseInt(u.year);
-  const practFlds=[['open','כיצד התחילה הפגישה וכיצד הסתיימה?'],['topics','רצף הנושאים שעלו'],['position','עמדת הנועץ/ת ושינויים'],['focus','נקודות מיקוד ומה פעל הזזה'],['insights','תובנות והחלטות'],['challenge','קושי מרכזי ויעד הבא'],['lessons','לקחים אישיים']];
-  const supFlds=[['topics','נושאים שנדונו'],['feedback','משוב מהמדריך/ה'],['contribution','תרומה להתפתחותך'],['challenges','אתגרים שעלו'],['selfLearn','מה למדת על עצמך'],['goals','יעדים לפגישה הבאה'],['lessons','לקחים']];
+  const practFlds=[['open','כיצד התחילה הפגישה וכיצד הסתיימה?'],['topics','רצף הנושאים שעלו'],['position','עמדת הנועץ/ת ושינויים'],['focus','נקודות מיקוד ומה פעל הזזה'],['insights','תובנות והחלטות'],['challenge','קושי מרכזי ויעד הבא'],['lessons','לקחים אישיים'],['nextQuestions','שאלות להמשך']];
+  const supFlds=[['topics','נושאים שנדונו'],['feedback','משוב מהמדריך/ה'],['contribution','תרומה להתפתחותך'],['challenges','אתגרים שעלו'],['selfLearn','מה למדת על עצמך'],['goals','יעדים לפגישה הבאה'],['lessons','לקחים'],['clientUpdate','מה התחדש לגבי הנועץ/ת']];
   const tabs=[
     {id:'overview',l:'סקירה'},
     {id:'practical',l:`התנסות (${(u.practical||[]).length})`},
@@ -1027,9 +1078,9 @@ function TeacherStudentDetail({u,stuUploads,setUploads}){
       {tab==='overview'&&(
         <div>
           <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill,minmax(120px,1fr))',gap:'8px',marginBottom:'14px'}}>
-            {[['התנסות',(u.practical||[]).length,'#1E244B','practical'],['הדרכות',(u.supervision||[]).length,'#524686','supervision'],['הצגות מקרה',(u.cases||[]).length,'#765C74','cases'],['הצגות של חברה בכיתה',(u.peer||[]).length,'#0d9488','peer'],['בקיאות',(u.proficiency||[]).length,'#C4896E','proficiency']].map(([l,n,col,tid])=>(
+            {[['התנסות',curRecs(u.practical,u.year).length,'#1E244B','practical'],['הדרכות',curRecs(u.supervision,u.year).length,'#524686','supervision'],['הצגות מקרה',curRecs(u.cases,u.year).length,'#765C74','cases'],['הצגות של חברה בכיתה',curRecs(u.peer,u.year).length,'#0d9488','peer'],['בקיאות',curRecs(u.proficiency,u.year).length,'#C4896E','proficiency']].map(([l,n,col,tid])=>(
               <div key={l} style={{padding:'10px',borderRadius:'9px',background:col+'15',borderRight:`3px solid ${col}`,cursor:'pointer'}} onClick={()=>setTab(tid)}>
-                <p style={{margin:'0 0 2px',fontSize:'.7rem',color:'#6b7280',fontWeight:600}}>{l}</p>
+                <p style={{margin:'0 0 2px',fontSize:'.7rem',color:'#6b7280',fontWeight:600}}>{l} · שנה נוכחית</p>
                 <p style={{margin:0,fontSize:'1.4rem',fontWeight:800,color:col,lineHeight:1}}>{n}</p>
               </div>
             ))}
@@ -1107,7 +1158,7 @@ function TeacherStudentDetail({u,stuUploads,setUploads}){
 
       {tab==='peer'&&(
         <div>
-          {!(u.peer||[]).length?<EmptyMsg t="טרם דווחו הצגות של חברות"/>:
+          {!(u.peer||[]).length?<EmptyMsg t="טרם דווחו הצגות של חברה בכיתה"/>:
           (u.peer||[]).map((r,i)=>(
             <SectionCard key={r.id||i} bg="#f0fdfa" header={
               <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
@@ -1208,7 +1259,7 @@ function TeacherPanel({users,setIsTeacher,setView,lockedGender,setTeacherGender}
           )}
           <div>
             <h1 style={{margin:0,fontSize:'1rem',fontWeight:800}}>
-              תצוגת מחנך{gender?' — '+(gender==='male'?'גברים':'נשים'):''}
+              תצוגת מרצה{gender?' — '+(gender==='male'?'גברים':'נשים'):''}
               {year?' — '+YLoc[year]:''}
             </h1>
             {newCount>0&&<span style={{fontSize:'.75rem',background:'#ef4444',padding:'1px 7px',borderRadius:'10px',marginTop:'2px',display:'inline-block'}}>●{newCount} קבצים חדשים</span>}
@@ -1220,7 +1271,7 @@ function TeacherPanel({users,setIsTeacher,setView,lockedGender,setTeacherGender}
       <div style={{maxWidth:'1100px',width:'100%',margin:'0 auto',padding:'20px 24px',boxSizing:'border-box'}}>
         {!gender&&(
           <div className="teacher-welcome" style={{maxWidth:'460px',margin:'48px auto 0',background:'white',borderRadius:'16px',padding:'32px',boxShadow:'0 4px 24px rgba(0,0,0,.07)',textAlign:'center'}}>
-            <p style={{margin:'0 0 6px',fontSize:'1rem',fontWeight:800,color:'#1e2a3a'}}>תצוגת מחנך</p>
+            <p style={{margin:'0 0 6px',fontSize:'1rem',fontWeight:800,color:'#1e2a3a'}}>תצוגת מרצה</p>
             <p style={{margin:'0 0 24px',fontSize:'.84rem',color:'#9ca3af'}}>בחר קבוצה להצגה</p>
             <div style={{display:'flex',gap:'12px',justifyContent:'center'}}>
               {[['female','נשים','#524686'],['male','גברים','#0F3F76']].map(([g,l,col])=>(
@@ -1318,9 +1369,9 @@ function LoginPage({users,setUsers,setCur,onLogo}){
         else setNeedsProfile({uid:cred.user.uid,email:cred.user.email||form.email});
       }
     }catch(err){
-      const m={'auth/email-already-in-use':'המייל כבר קיים','auth/wrong-password':'סיסמה שגויה',
-        'auth/user-not-found':'משתמש לא קיים','auth/invalid-credential':'פרטי כניסה שגויים'};
-      alert(m[err.code]||err.message);
+      const m={'auth/email-already-in-use':'כתובת המייל כבר רשומה במערכת','auth/wrong-password':'סיסמה שגויה',
+        'auth/user-not-found':'משתמש לא קיים','auth/invalid-credential':'פרטי כניסה שגויים','auth/weak-password':'הסיסמה חלשה מדי (לפחות 6 תווים)','auth/invalid-email':'כתובת המייל אינה תקינה','auth/too-many-requests':'יותר מדי ניסיונות. נסי שוב בעוד כמה דקות','auth/network-request-failed':'בעיית חיבור לאינטרנט'};
+      alert(m[err.code]||'אירעה שגיאה בכניסה. נסי שוב.');
     }
     setLoading(false);
   };
@@ -1335,7 +1386,7 @@ function LoginPage({users,setUsers,setCur,onLogo}){
         startLevel:parseInt(form.year),startYYYY:acadYear(),
         practical:[],supervision:[],cases:[],impact:[],proficiency:[],finalProject:null,yearHistory:[]};
       await db.collection('users').doc(nu.id).set(nu);setUsers([...users,nu]);setCur(nu);
-    }catch(err){alert(err.message);}
+    }catch(err){console.error(err);alert('אירעה שגיאה. נסי שוב.');}
     setLoading(false);
   };
 
@@ -1447,6 +1498,7 @@ function LoginPage({users,setUsers,setCur,onLogo}){
                 <div style={{flex:1,height:'1px',background:'#e5e7eb'}}/>
               </div>
               <button type="button" disabled={loading} onClick={async()=>{
+                if(/FBAN|FBAV|Instagram|WhatsApp|; wv\)|GSA\/|Line\//i.test(navigator.userAgent)){alert('כניסה עם גוגל לא עובדת מתוך וואטסאפ או מייל. פתחי את האתר בדפדפן (Chrome או Safari), או היכנסי עם אימייל וסיסמה.');return;}
                 setLoading(true);
                 try{
                   const provider=new firebase.auth.GoogleAuthProvider();
@@ -1467,7 +1519,7 @@ function LoginPage({users,setUsers,setCur,onLogo}){
                     setCur(nu);
                   }
                 }catch(err){
-                  if(err.code!=='auth/popup-closed-by-user') alert(err.message);
+                  if(err.code!=='auth/popup-closed-by-user'&&err.code!=='auth/cancelled-popup-request'){console.error(err);alert(err.code==='auth/popup-blocked'||err.code==='auth/operation-not-supported-in-this-environment'?'הכניסה עם גוגל לא נתמכת בדפדפן הזה. פתחי את האתר ב-Chrome או Safari, או היכנסי עם אימייל וסיסמה.':'אירעה שגיאה בכניסה עם גוגל. נסי שוב או היכנסי עם אימייל וסיסמה.');}
                 }
                 setLoading(false);
               }}
@@ -1495,7 +1547,7 @@ function LoginPage({users,setUsers,setCur,onLogo}){
           {!reg&&<><br/>
             <button onClick={async()=>{
               const em=prompt('הזן מייל לאיפוס:');
-              if(em){try{await auth.sendPasswordResetEmail(em);alert('נשלח מייל לאיפוס סיסמה');}catch(e){alert('שגיאה: '+e.message);}}
+              if(em){try{await auth.sendPasswordResetEmail(em);alert('נשלח מייל לאיפוס סיסמה');}catch(e){alert('הפעולה נכשלה. '+heErr(e));}}
             }} style={{background:'none',border:'none',color:'#9ca3af',cursor:'pointer',fontSize:'0.82rem',marginTop:'8px',textDecoration:'underline'}}>
               שכחתי סיסמה
             </button>
@@ -1518,6 +1570,7 @@ function MainApp({user,updateUser,view,setView,onLogout,onLogo,reqOv,siteC,updat
   const req=gReq(user.gender,ay,reqOv);
   const yr=parseInt(ay),isFem=user.gender==='female';
   const yl=YL[ay]||`שנה ${ay}`;
+  useEffect(()=>{if((view==='proficiency'&&!req.pr)||(view==='finalwork'&&!req.fp))setView('dashboard');},[view,req.pr,req.fp]);
   const readUps=user.readUpdates||[];
   const unreadCount=updates.filter(u=>!readUps.includes(u.id)).length;
   const nav=[
@@ -1625,7 +1678,7 @@ function Dashboard({user,setView,req,siteC,unreadCount}){
   ];
   return(
     <div style={{display:'flex',flexDirection:'column',gap:'20px'}}>
-      {unreadCount>0&&(
+      {unreadCount>0&&user.gender==='female'&&(
         <div onClick={()=>setView('updates')} style={{padding:'14px 20px',borderRadius:'12px',background:'linear-gradient(135deg,#E88F6A,#A87071)',color:'white',cursor:'pointer',display:'flex',alignItems:'center',gap:'12px',boxShadow:'0 4px 14px rgba(232,143,106,.35)',animation:'fadeSlideUp .4s ease both'}}>
           <span style={{background:'rgba(255,255,255,.25)',borderRadius:'50%',width:'32px',height:'32px',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'1.1rem',fontWeight:800,flexShrink:0}}>{unreadCount}</span>
           <div><p style={{margin:0,fontWeight:700,fontSize:'.92rem'}}>יש {unreadCount} עדכונים חדשים!</p><p style={{margin:'2px 0 0',fontSize:'.78rem',opacity:.9}}>לחצו כאן לצפייה בעדכונים</p></div>
@@ -1810,6 +1863,7 @@ function UB({onUpload,uploading,label,progress,accept}){
 function PracticalHours({user,updateUser,req}){
   const ef={date:'',num:'',who:'',open:'',topics:'',position:'',focus:'',insights:'',nextQuestions:'',challenge:'',lessons:''};
   const [show,setShow]=useState(false),[editIdx,setEditIdx]=useState(null),[expIdx,setExpIdx]=useState(null),[ul,setUl]=useState(false),[form,setForm]=useState(ef);
+  useEffect(()=>{if(editIdx!==null){setEditIdx(null);setShow(false);}},[(user.practical||[]).length]);
   const reset=()=>{setForm(ef);setShow(false);setEditIdx(null);};
   const save=e=>{e.preventDefault();const a=[...(user.practical||[])];if(editIdx!==null)a[editIdx]={...form,who:(form.who||'').trim(),id:a[editIdx].id,atts:a[editIdx].atts||((a[editIdx].att)?[a[editIdx].att]:[])};else a.push({...form,who:(form.who||'').trim(),id:Date.now().toString(),atts:[],yr:user.year});updateUser({practical:a});reset();alert('הדיווח נשמר');};
   const [mode,setMode]=useState('list'),[personFilter,setPersonFilter]=useState('');
@@ -1826,10 +1880,10 @@ function PracticalHours({user,updateUser,req}){
   const pill=on=>({padding:'6px 14px',borderRadius:'20px',fontWeight:600,fontSize:'.8rem',cursor:'pointer',border:on?'none':'1px solid var(--brd)',background:on?'linear-gradient(135deg,var(--nf),var(--nt))':'var(--card)',color:on?'white':'var(--txt)'});
   const [prog,setProg]=useState(null);
   const getAtts=r=>{if(r.atts&&r.atts.length)return r.atts;if(r.att)return[r.att];return[];};
-  const attach=async(e,i)=>{const f=e.target.files[0];if(!f)return;if(!okFile(f)){alert(OK_MSG);return;}const cur=getAtts((user.practical||[])[i]);if(cur.length>=3){alert('מקסימום 3 קבצים לדיווח');return;}setUl(true);setProg(0);try{const r=await upFile(f,user.id,'practical',p=>setProg(p));const a=[...(user.practical||[])];a[i]={...a[i],atts:[...cur,r]};updateUser({practical:a});alert('קובץ הועלה');}catch(e){console.error(e);alert('שגיאה בהעלאה: '+(e.message||e.code||String(e)));}setUl(false);setProg(null);e.target.value='';}; 
+  const attach=async(e,i)=>{const f=e.target.files[0];if(!f)return;if(!okFile(f)){alert(OK_MSG);return;}const cur=getAtts((user.practical||[])[i]);if(cur.length>=3){alert('מקסימום 3 קבצים לדיווח');return;}setUl(true);setProg(0);try{const r=await upFile(f,user.id,'practical',p=>setProg(p));const a=[...(user.practical||[])];a[i]={...a[i],atts:[...cur,r]};updateUser({practical:a});alert('קובץ הועלה');}catch(e){console.error(e);alert('שגיאה בהעלאה. '+heErr(e));}setUl(false);setProg(null);e.target.value='';}; 
   const flds=[['open','כיצד התחילה הפגישה וכיצד הסתיימה?'],['topics','רצף הנושאים שעלו'],['position','עמדת הנועץ',null,'נקודות קושי שעלו בפגישה, מחשבות שעלו לך.'],['focus','נקודות מפתח ופעולות הזזה'],['insights','תובנות'],['nextQuestions','שאלות לקראת הפגישה הבאה'],['challenge','קושי מרכזי ויעד הבא'],['lessons','לקחים אישיים']];
   return(<div>
-    <SH title="שעות התנסות מעשית" sub="דיווח והתבוננות על תהליך הייעוץ" done={curRecs(user.practical,user.year).length} total={req.p||0} color="#1E244B" onAdd={()=>setShow(!show)} adding={show} />
+    <SH title="שעות התנסות" sub="דיווח והתבוננות על תהליך הייעוץ" done={curRecs(user.practical,user.year).length} total={req.p||0} color="#1E244B" onAdd={()=>setShow(!show)} adding={show} />
     {String(user.year)!=='4'&&<div style={{padding:'11px 15px',borderRadius:'10px',background:'rgba(196,137,110,.1)',border:'1px solid rgba(196,137,110,.28)',marginBottom:'14px',fontSize:'.82rem',color:'#7a4a33',lineHeight:1.6}}>ℹ️ {peerPracticeNote(user.gender==='female')}</div>}
     {show&&(<div className="card" style={{padding:'22px',marginBottom:'14px'}}>
       <h3 style={{margin:'0 0 14px',fontSize:'.97rem',fontWeight:700,color:'var(--txt)'}}>{editIdx!==null?'עריכת דיווח':'דיווח חדש'}</h3>
@@ -1900,6 +1954,7 @@ function PracticalHours({user,updateUser,req}){
 function PeerPresentations({user,updateUser}){
   const ef={date:'',presenter:'',took:'',relevance:'',open:''};
   const [show,setShow]=useState(false),[editIdx,setEditIdx]=useState(null),[expIdx,setExpIdx]=useState(null),[form,setForm]=useState(ef);
+  useEffect(()=>{if(editIdx!==null){setEditIdx(null);setShow(false);}},[(user.peer||[]).length]);
   const all=user.peer||[];const items=curRecs(all,user.year);
   const reset=()=>{setForm(ef);setShow(false);setEditIdx(null);};
   const save=e=>{
@@ -1948,8 +2003,9 @@ function PeerPresentations({user,updateUser}){
 function SupervisionHours({user,updateUser,req}){
   const ef={date:'',inst:'',topics:'',feedback:'',contribution:'',challenges:'',selfLearn:'',clientUpdate:'',goals:'',lessons:''};
   const [show,setShow]=useState(false),[editIdx,setEditIdx]=useState(null),[expIdx,setExpIdx]=useState(null),[form,setForm]=useState(ef);
+  useEffect(()=>{if(editIdx!==null){setEditIdx(null);setShow(false);}},[(user.supervision||[]).length]);
   const reset=()=>{setForm(ef);setShow(false);setEditIdx(null);};
-  const save=e=>{e.preventDefault();const a=[...(user.supervision||[])];if(editIdx!==null)a[editIdx]={...form,id:a[editIdx].id};else a.push({...form,id:Date.now().toString(),yr:user.year});updateUser({supervision:a});reset();alert('דיווח נשמר');};
+  const save=e=>{e.preventDefault();const a=[...(user.supervision||[])];if(editIdx!==null)a[editIdx]={...form,id:a[editIdx].id};else a.push({...form,id:Date.now().toString(),yr:user.year});updateUser({supervision:a});reset();alert('הדיווח נשמר');};
   const flds=[
     ['challenges','אתגרים שעלו',true,'עם אילו שאלות באת להדרכה?'],
     ['selfLearn','מה למדת על עצמך',true],
@@ -1967,7 +2023,7 @@ function SupervisionHours({user,updateUser,req}){
       <form onSubmit={save} style={{display:'flex',flexDirection:'column',gap:'12px'}}>
         <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'12px'}}>
           <FL label="תאריך" req><input type="date" required value={form.date} onChange={e=>setForm({...form,date:e.target.value})}/></FL>
-          <FL label="שם המדריך/ה" req><select required value={form.inst} onChange={e=>setForm({...form,inst:e.target.value})}><option value="">בחר מדריך/ה</option>{INST[user.gender].map((x,i)=><option key={i} value={x.name}>{x.name}</option>)}</select></FL>
+          <FL label="שם המדריך/ה" req><select required value={form.inst} onChange={e=>setForm({...form,inst:e.target.value})}><option value="">בחר מדריך/ה</option>{(INST[user.gender]||[]).map((x,i)=><option key={i} value={x.name}>{x.name}</option>)}</select></FL>
         </div>
         {flds.map(([k,l,r,h])=><FL key={k} label={l} req={r} help={h}><textarea required={r} value={form[k]} rows={3} onChange={e=>setForm({...form,[k]:e.target.value})} style={{resize:'vertical'}}/></FL>)}
         <div style={{display:'flex',gap:'9px'}}><button type="submit" className="btn-p" style={{flex:1,padding:'11px',borderRadius:'10px',fontWeight:700,border:'none',cursor:'pointer'}}>שמור</button><button type="button" onClick={reset} style={{padding:'11px 18px',borderRadius:'10px',background:'rgba(0,0,0,.06)',color:'var(--txt)',fontWeight:600,border:'none',cursor:'pointer'}}>ביטול</button></div>
@@ -1975,7 +2031,7 @@ function SupervisionHours({user,updateUser,req}){
     </div>)}
     {!curRecs(user.supervision,user.year).length?(<div className="card" style={{padding:'36px',textAlign:'center'}}><p style={{color:'var(--sub)',marginBottom:'12px'}}>טרם דווחו הדרכות בשנה זו</p><button onClick={()=>setShow(true)} className="btn-p" style={{padding:'9px 20px',borderRadius:'10px',fontWeight:700,border:'none',cursor:'pointer'}}>דיווח ראשון</button></div>)
     :curRecs(user.supervision,user.year).map((r,idx)=>{const i=(user.supervision||[]).indexOf(r);return(
-      <RC key={r.id} badge={`הדרכה #${idx+1}`} bc="#10b981" meta={`${r.date?new Date(r.date).toLocaleDateString('he-IL'):''}${r.inst?` | ${r.inst}`:''}`} onEdit={()=>{setForm(r);setEditIdx(i);setShow(true);window.scrollTo({top:0,behavior:'smooth'});}} onDelete={()=>{if(confirm('למחוק?')){const a=[...user.supervision];a.splice(i,1);updateUser({supervision:a});}}} expanded={expIdx===i} onToggle={()=>setExpIdx(expIdx===i?null:i)} preview={r.topics}>
+      <RC key={r.id} badge={`הדרכה #${idx+1}`} bc="#10b981" meta={`${r.date?new Date(r.date).toLocaleDateString('he-IL'):''}${r.inst?` | ${r.inst}`:''}`} onEdit={()=>{setForm({...ef,...r});setEditIdx(i);setShow(true);window.scrollTo({top:0,behavior:'smooth'});}} onDelete={()=>{if(confirm('למחוק?')){const a=[...user.supervision];a.splice(i,1);updateUser({supervision:a});}}} expanded={expIdx===i} onToggle={()=>setExpIdx(expIdx===i?null:i)} preview={r.topics}>
         <div style={{display:'flex',flexDirection:'column',gap:'9px',marginBottom:'7px'}}>{flds.map(([k,t])=><RS key={k} title={t} content={r[k]}/>)}</div>
       </RC>
     );})}
@@ -2001,7 +2057,7 @@ function CasePresentation({user,updateUser,req,siteC}){
     const setUl=which==='presentation'?setUlP:which==='summary'?setUlS:setUlA,setProg=which==='presentation'?setProgP:which==='summary'?setProgS:setProgA;
     setUl(true);setProg(0);
     try{const r=await upFile(f,user.id,'cases',p=>setProg(p));setForm(prev=>({...prev,[which]:{url:r.url,name:r.name,at:r.at}}));}
-    catch(err){console.error(err);alert('שגיאה בהעלאה: '+(err.message||err.code||String(err)));}
+    catch(err){console.error(err);alert('שגיאה בהעלאה. '+heErr(err));}
     setUl(false);setProg(null);e.target.value='';
   };
   const save=()=>{
@@ -2082,7 +2138,7 @@ function ProficiencyTests({user,updateUser,req,siteC}){
     const setUl=which==='examFile'?setUlE:setUlR,setProg=which==='examFile'?setProgE:setProgR;
     setUl(true);setProg(0);
     try{const r=await upFile(file,user.id,'proficiency',p=>setProg(p));setF(prev=>({...prev,[which]:{url:r.url,name:r.name,at:r.at}}));}
-    catch(err){console.error(err);alert('שגיאה בהעלאה: '+(err.message||err.code||String(err)));}
+    catch(err){console.error(err);alert('שגיאה בהעלאה. '+heErr(err));}
     setUl(false);setProg(null);e.target.value='';
   };
   const add=()=>{if(!f.date||!f.topic){alert('נא למלא תאריך ונושא');return;}updateUser({proficiency:[...tests,{id:Date.now(),yr:user.year,...f}]});setF(ef);alert('מבחן נוסף');};
@@ -2118,7 +2174,7 @@ function FinalProject({user,updateUser,siteC}){
   const [ul,setUl]=useState(false);const [prog,setProg]=useState(null);const proj=user.finalProject;
   const reqFile=siteC&&siteC.caseReqFile;
   const finalAssignFile=siteC&&siteC.plaFinalAssignment;
-  const upload=async e=>{const f=e.target.files[0];if(!f)return;if(!okFile(f)){alert(OK_MSG);return;}setUl(true);setProg(0);try{const r=await upFile(f,user.id,'final',p=>setProg(p));updateUser({finalProject:r});alert('העבודה הועלתה!');}catch(e){console.error(e);alert('שגיאה בהעלאה: '+(e.message||e.code||String(e)));}setUl(false);setProg(null);e.target.value='';};
+  const upload=async e=>{const f=e.target.files[0];if(!f)return;if(!okFile(f)){alert(OK_MSG);return;}setUl(true);setProg(0);try{const r=await upFile(f,user.id,'final',p=>setProg(p));updateUser({finalProject:r});alert('העבודה הועלתה!');}catch(e){console.error(e);alert('שגיאה בהעלאה. '+heErr(e));}setUl(false);setProg(null);e.target.value='';};
   return(<div><SH title="עבודה מסכמת" sub="העלאת קובץ (PDF, Word, תמונה או Pages)" done={proj?1:0} total={1} color="#E88F6A" onAdd={()=>{}} adding={false}/>
     <RefFileCard icon="📋" label="דרישות לעבודה המסכמת" file={reqFile} color="#E88F6A"/>
     <RefFileCard icon="📌" label="מטלה מסכמת" file={finalAssignFile} color="#E88F6A"/>
@@ -2188,7 +2244,7 @@ function UpdatesPage({user,updateUser,updates}){
               </a>
             )}
             <div style={{marginTop:'8px',fontSize:'.73rem',color:'var(--sub)'}}>
-              {up.author&&<span>פורסם ע"י {up.author}</span>}
+              {up.author&&<span>פורסם ע״י {up.author}</span>}
             </div>
           </div>
         );
@@ -2308,7 +2364,23 @@ function Footer({siteC}){
   );
 }
 
-ReactDOM.render(<App/>,document.getElementById('root'));
+class ErrorBoundary extends React.Component{
+  constructor(p){super(p);this.state={err:null};}
+  static getDerivedStateFromError(e){return {err:e};}
+  componentDidCatch(e,info){console.error(e,info);}
+  render(){
+    if(this.state.err)return(
+      <div style={{minHeight:'100vh',display:'flex',alignItems:'center',justifyContent:'center',padding:'24px',background:'#FBF3EA',direction:'rtl',fontFamily:'sans-serif'}}>
+        <div style={{background:'#fff',borderRadius:'16px',padding:'28px',maxWidth:'360px',textAlign:'center',boxShadow:'0 8px 24px rgba(0,0,0,.12)'}}>
+          <h2 style={{margin:'0 0 8px',color:'#1E244B'}}>משהו השתבש</h2>
+          <p style={{color:'#54595F',margin:'0 0 16px'}}>הנתונים שלך שמורים. נסי לרענן את העמוד.</p>
+          <button onClick={()=>location.reload()} style={{padding:'10px 22px',borderRadius:'12px',border:'none',background:'#1E244B',color:'#fff',fontWeight:700,cursor:'pointer'}}>רענון</button>
+        </div>
+      </div>);
+    return this.props.children;
+  }
+}
+ReactDOM.render(<ErrorBoundary><App/></ErrorBoundary>,document.getElementById('root'));
 </script>
 <script>
 if('serviceWorker' in navigator){
