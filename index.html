@@ -491,13 +491,31 @@ function App(){
       db.collection('users').doc(cur.id).update({year:adv.year,practical:adv.practical,supervision:adv.supervision,cases:adv.cases,proficiency:adv.proficiency,yearHistory:adv.yearHistory}).catch(console.error);
     }
   },[cur&&cur.id]);
+  // כתיבה גורפת של כל המשתמשים - רק למנהלת/מרצה (לתלמידה זה היה דורס נתונים חדשים ממכשיר אחר)
   useEffect(()=>{
-    if(users.length>0) users.forEach(u=>db.collection('users').doc(u.id).set(u).catch(console.error));
+    if((isAdmin||isTeacher)&&users.length>0) users.forEach(u=>db.collection('users').doc(u.id).set(u).catch(console.error));
   },[users]);
+  // רענון הנתונים של התלמידה המחוברת מהשרת (כניסה מחודשת למכשיר אחר / חזרה לאפליקציה)
+  const curIdRef=useRef(null);
+  curIdRef.current=cur&&cur.id;
+  const refreshCur=()=>{
+    const id=curIdRef.current;if(!id)return;
+    db.collection('users').doc(id).get().then(d=>{
+      if(d.exists&&curIdRef.current===id){const f=applyAutoAdvance({id:d.id,...d.data()});setCur(c=>c&&c.id===id?{...c,...f}:c);setUsers(us=>us.map(u=>u.id===id?{...u,...f}:u));}
+    }).catch(console.error);
+  };
+  useEffect(()=>{
+    refreshCur();
+    const onVis=()=>{if(document.visibilityState==='visible')refreshCur();};
+    document.addEventListener('visibilitychange',onVis);
+    return()=>document.removeEventListener('visibilitychange',onVis);
+  },[cur&&cur.id]);
 
   const updateUser=upd=>{
-    const a=users.map(u=>u.id===cur.id?{...u,...upd}:u);
-    setUsers(a);setCur({...cur,...upd});
+    setUsers(us=>us.map(u=>u.id===cur.id?{...u,...upd}:u));
+    setCur(c=>({...c,...upd}));
+    let clean=upd;try{clean=JSON.parse(JSON.stringify(upd));}catch(e){}
+    db.collection('users').doc(cur.id).set(clean,{merge:true}).catch(e=>{console.error(e);alert('השמירה נכשלה. בדקי חיבור לאינטרנט ונסי שוב.');});
   };
 
   const handleLogo=()=>{
@@ -1342,7 +1360,7 @@ function LoginPage({users,setUsers,setCur,onLogo}){
           pointerEvents:'none',zIndex:0}}/>
 
         {/* Logo top-right */}
-        <div style={{position:'absolute',top:'16px',right:'20px',zIndex:3,padding:'0 0 30px 0',background:'radial-gradient(ellipse 80% 70% at 70% 30%, rgba(255,255,255,0.18) 0%, transparent 70%)'}}>
+        <div style={{position:'absolute',top:'16px',right:'20px',zIndex:3,padding:'10px 14px',background:'rgba(255,255,255,0.94)',borderRadius:'18px',boxShadow:'0 6px 18px rgba(0,0,0,0.18)'}}>
           <img src={`data:image/png;base64,${LOGO}`} alt="לוגו" className="logo-img" style={{width:'152px',height:'auto',cursor:'pointer'}} onClick={onLogo} onDoubleClick={onLogo}/>
         </div>
 
