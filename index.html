@@ -2031,10 +2031,10 @@ function SupervisionHours({user,updateUser,req}){
     ['selfLearn','מה למדת על עצמך',true],
     ['clientUpdate','מה התחדש לך לגבי הנועצת',true],
     ['contribution','במה נתרמתי מההדרכה',true],
-    ['goals','מטרות לפגישה הבאה',true],
+    ['goals','מטרות לפגישה הבאה',false],
     ['lessons','נקודות להדרכה הבאה',false],
     ['topics','נושאים שנדונו',true],
-    ['feedback','משוב מהמדריך/ה',true],
+    ['feedback','משוב מהמדריך/ה',false],
   ];
   return(<div>
     <SH title="הדרכות אישיות" sub="ליווי מקצועי והעמקת תהליך הלמידה" done={curRecs(user.supervision,user.year).length} total={req.s||0} color="#524686" onAdd={()=>setShow(!show)} adding={show}/>
