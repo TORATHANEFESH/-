@@ -577,22 +577,29 @@ function App(){
       alert('הכניסה נכשלה. נסי שוב.');
     }
   };
-  const handleLogo=()=>{
+  const handleLogo=async()=>{
     const now=Date.now();
     const recent=logoClicksRef.current.filter(t=>now-t<1200);
     if(recent.length>=2){
       // Triple click — admin/teacher
       logoClicksRef.current=[];
       if(confirm('כניסת צוות עם חשבון גוגל?\nאישור = כניסה עם גוגל\nביטול = כניסה עם סיסמה (זמני)')){staffGoogleLogin();return;}
-      if(!pwReady){alert('ההגדרות עדיין נטענות. נסי שוב בעוד רגע.');return;}
+      let aPw=adminPw,tPw=teacherPw;
+      if(!pwReady){
+        try{
+          const sd=await db.collection('settings').doc('general').get();
+          if(sd.exists){const sv=sd.data();if(sv.adminPassword){aPw=sv.adminPassword;setAdminPw(aPw);}if(sv.teacherPassword){tPw=sv.teacherPassword;setTeacherPw(tPw);}}
+          setPwReady(true);
+        }catch(e){console.error(e);alert('אין חיבור לשרת ההגדרות. בדקי חיבור לאינטרנט (או סינון) ונסי שוב.');return;}
+      }
       const choice=prompt('בחר תפקיד:\n1 — מנהל\n2 — מרצה\n\nהזן מספר:');
       if(choice==='1'){
         const pw=prompt('סיסמת מנהל:');
-        if(pw===adminPw){setIsAdmin(true);setView('admin');}
+        if(pw===aPw){setIsAdmin(true);setView('admin');}
         else if(pw) alert('סיסמה שגויה');
       } else if(choice==='2'){
         const pw=prompt('סיסמת מרצה:');
-        if(pw===teacherPw){
+        if(pw===tPw){
           const g=prompt('בחר מגדר:\n1 — גברים\n2 — נשים');
           if(g==='1'||g==='2'){
             setTeacherGender(g==='1'?'male':'female');
@@ -625,7 +632,7 @@ function App(){
     return <TeacherPanel users={users} setIsTeacher={setIsTeacher} setView={setView} lockedGender={teacherGender} setTeacherGender={setTeacherGender}/>;
 
   if(!cur)
-    return <LoginPage users={users} setUsers={setUsers} setCur={setCur} onLogo={handleLogo}/>;
+    return <LoginPage users={users} setUsers={setUsers} setCur={setCur} onLogo={handleLogo} onStaff={staffGoogleLogin}/>;
 
   return <MainApp key={cur.id} user={cur} updateUser={updateUser} view={view} setView={setView}
     onLogout={()=>{setCur(null);setView('login');setIsAdmin(false);setIsTeacher(false);setTeacherGender(null);try{localStorage.removeItem('cur_user');}catch(e){}}}
@@ -1363,7 +1370,7 @@ function TeacherPanel({users,setIsTeacher,setView,lockedGender,setTeacherGender}
   );
 }
 
-function LoginPage({users,setUsers,setCur,onLogo}){
+function LoginPage({users,setUsers,setCur,onLogo,onStaff}){
   const [reg,setReg]=useState(false);
   const [form,setForm]=useState({name:'',year:'2',gender:'female',email:'',pw:''});
   const [loading,setLoading]=useState(false);
@@ -1574,6 +1581,9 @@ function LoginPage({users,setUsers,setCur,onLogo}){
           </>}
         </div>
         </>)}
+      </div>
+      <div style={{textAlign:'center',marginTop:'18px',position:'relative',zIndex:2}}>
+        <button type="button" onClick={()=>onStaff&&onStaff()} style={{background:'none',border:'none',color:'rgba(255,255,255,0.85)',cursor:'pointer',fontSize:'0.85rem',textDecoration:'underline'}}>כניסת צוות</button>
       </div>
       </div>
 
